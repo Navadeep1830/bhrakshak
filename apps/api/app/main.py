@@ -1,0 +1,68 @@
+import logging
+import sys
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+from app.api.v1 import alerts, analytics, auth, briefing, demo, ingest, reports, roads, ws, zones
+from app.core.config import settings
+
+
+def _json_logger():
+    h = logging.StreamHandler(sys.stdout)
+    h.setFormatter(logging.Formatter('{"ts":"%(asctime)s","lvl":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}'))
+    root = logging.getLogger()
+    root.handlers = [h]
+    root.setLevel(logging.INFO)
+    return logging.getLogger("bhrakshak")
+
+
+log = _json_logger()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    log.info("%s starting (demo_mode=%s)", settings.app_name, settings.demo_mode)
+    yield
+    log.info("shutdown complete")
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version="0.1.0",
+    description="AI Landslide Early Warning & Risk Intelligence Platform for NER (SIH26001)",
+    lifespan=lifespan,
+)
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["600/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+for r in (auth.router, zones.router, reports.router, alerts.router, roads.router,
+          demo.router, analytics.router, briefing.router, ingest.router):
+    app.include_router(r, prefix="/api/v1")
+app.include_router(ws.router)  # websocket at /ws/live
+
+
+@app.get("/health", tags=["ops"])
+async def health():
+    return {"status": "ok", "service": "bhrakshak-api", "demo_mode": settings.demo_mode}
+
+
+@app.exception_handler(Exception)
+async def unhandled(request: Request, exc: Exception):
+    log.error("unhandled error on %s: %s", request.url.path, exc)
+    return JSONResponse(status_code=500, content={"detail": "internal error"})

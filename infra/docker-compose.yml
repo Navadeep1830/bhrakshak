@@ -1,0 +1,188 @@
+name: bhrakshak
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://bhrakshak:bhrakshak@postgres:5432/bhrakshak
+  REDIS_URL: redis://redis:6379/0
+  MQTT_HOST: mosquitto
+  MQTT_PORT: "1883"
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ROOT_USER: bhrakshak
+  MINIO_ROOT_PASSWORD: bhrakshak-secret
+  MINIO_BUCKET: bhrakshak-media
+  JWT_SECRET: ${JWT_SECRET:-change-me-in-production-9f2c1a}
+  ACCESS_TOKEN_MINUTES: "30"
+  REFRESH_TOKEN_DAYS: "14"
+  DEMO_MODE: "true"
+  FIXTURE_MODE: "false"
+
+x-backend-volumes: &backend-volumes
+  volumes:
+    - ../apps/api/app:/srv/app
+    - ../apps/api/alembic:/srv/alembic
+    - ../apps/api/alembic.ini:/srv/alembic.ini
+    - ../apps/worker:/srv/apps/worker
+    - ../scripts:/srv/scripts
+    - ../data:/srv/data
+    - ../demo:/srv/demo
+    - ../ml:/srv/ml
+
+services:
+  postgres:
+    image: timescale/timescaledb-ha:pg15 # pg15 + timescaledb + postgis in one image
+    environment:
+      POSTGRES_USER: bhrakshak
+      POSTGRES_PASSWORD: bhrakshak
+      POSTGRES_DB: bhrakshak
+    ports: ["5433:5432"]
+    volumes:
+      - pgdata:/home/postgres/pgdata/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bhrakshak -d bhrakshak"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+    command: redis-server --save 60 1 --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: bhrakshak
+      MINIO_ROOT_PASSWORD: bhrakshak-secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 bhrakshak bhrakshak-secret &&
+      mc mb -p local/bhrakshak-media || true &&
+      mc anonymous set download local/bhrakshak-media || true;
+      exit 0"
+
+  martin:
+    image: ghcr.io/maplibre/martin:latest
+    command: ["--config", "/martin/config.yml"]
+    ports: ["3001:3000"]
+    volumes:
+      - ./martin/config.yml:/martin/config.yml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/backend.Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment: *backend-env
+    ports: ["8000:8000"]
+    <<: *backend-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/backend.Dockerfile
+    command: celery -A worker.celery_app worker -l info -Q default,tiles -c 2
+    environment: *backend-env
+    <<: *backend-volumes
+    depends_on:
+      - api
+
+  beat:
+    build:
+      context: ..
+      dockerfile: infra/backend.Dockerfile
+    command: celery -A worker.celery_app beat -l info
+    environment: *backend-env
+    <<: *backend-volumes
+    depends_on:
+      - worker
+
+  flower:
+    build:
+      context: ..
+      dockerfile: infra/backend.Dockerfile
+    command: celery -A worker.celery_app flower --port=5555
+    environment: *backend-env
+    ports: ["5555:5555"]
+    <<: *backend-volumes
+    depends_on:
+      - worker
+
+  dashboard:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_MARTIN_URL: http://localhost:3001
+      WATCHPACK_POLLING: "true"
+    ports: ["3000:3000"]
+    volumes:
+      - ../apps/dashboard:/app
+      - dash_node_modules:/app/node_modules
+
+  pwa:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports: ["5173:5173"]
+    volumes:
+      - ../apps/field-pwa:/app
+      - pwa_node_modules:/app/node_modules
+
+  seed:
+    build:
+      context: ..
+      dockerfile: infra/backend.Dockerfile
+    profiles: ["tools"]
+    command: python /srv/scripts/seed.py
+    environment: *backend-env
+    <<: *backend-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  miniodata:
+  dash_node_modules:
+  pwa_node_modules:

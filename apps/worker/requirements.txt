@@ -1,0 +1,5 @@
+celery[redis]>=5.4
+redis>=5.0
+paho-mqtt>=2.1
+httpx>=0.27
+flower>=2.0

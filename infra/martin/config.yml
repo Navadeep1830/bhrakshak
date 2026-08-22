@@ -1,0 +1,47 @@
+# Martin serves PostGIS tables as Mapbox Vector Tiles for MapLibre.
+# URL scheme: http://localhost:3001/{table}/{z}/{x}/{y}.pbf
+postgres:
+  connection_string: postgres://bhrakshak:bhrakshak@postgres:5432/bhrakshak
+  default_srid: 4326
+  auto_publish: false
+  tables:
+    risk_cells:
+      schema: public
+      table: risk_cells
+      srid: 4326
+      geometry_column: geom
+      bounds: [88.0, 23.0, 94.6, 28.0]
+      properties:
+        zone_code: zone_code
+        name: name
+        district: district
+        state: state
+        hazard_level: hazard_level
+        prob_24h: prob_24h
+    zones:
+      schema: public
+      table: zones
+      srid: 4326
+      geometry_column: geom
+      bounds: [88.0, 23.0, 94.6, 28.0]
+      properties:
+        zone_code: zone_code
+        name: name
+        district: district
+        state: state
+        susc_mean: susc_mean
+        susc_p90: susc_p90
+        population: population
+        road_km: road_km
+    road_status:
+      schema: public
+      table: road_status
+      srid: 4326
+      table_name: road_status
+      geometry_column: segment_geom
+      bounds: [88.0, 23.0, 94.6, 28.0]
+      properties:
+        status: status
+        source: source
+        delay_min: delay_min
+        road_name: road_name

@@ -1,0 +1,72 @@
+import asyncio
+import os
+
+import httpx
+import pytest
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.db.session import get_db
+from app.main import app
+from app.models import Base
+
+TEST_DB_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://bhrakshak:bhrakshak@localhost:5433/bhrakshak_test",
+)
+
+
+async def _db_available() -> bool:
+    try:
+        eng = create_async_engine(TEST_DB_URL, pool_pre_ping=False)
+        async with eng.connect():
+            pass
+        await eng.dispose()
+        return True
+    except Exception:
+        return False
+
+
+DB_OK = asyncio.get_event_loop().run_until_complete(_db_available()) if True else False
+
+pytestmark = pytest.mark.skipif(not DB_OK, reason="postgres test db unreachable (run make up)")
+
+
+@pytest_asyncio.fixture(scope="session")
+async def engine():
+    eng = create_async_engine(TEST_DB_URL)
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield eng
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await eng.dispose()
+
+
+@pytest_asyncio.fixture
+async def client(engine):
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def override():
+        async with Session() as s:
+            yield s
+
+    app.dependency_overrides[get_db] = override
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+ADMIN = ("admin@bhrakshak.in", "Admin@123")
+CITIZEN = ("citizen@bhrakshak.in", "Citizen@123")
+
+
+async def token_for(client: httpx.AsyncClient, email: str, password: str) -> dict:
+    r = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def auth(tok: dict) -> dict:
+    return {"Authorization": f"Bearer {tok['access_token']}"}

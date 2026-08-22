@@ -1,0 +1,94 @@
+{
+  "generated_by": "ml/models/backtest.py",
+  "note": "SYNTHETIC placeholder - replace by running the real temporal backtest",
+  "metrics": {
+    "period": {
+      "train": "<=2019",
+      "val": "2020-2022",
+      "test": "2023-2024"
+    },
+    "per_level": [
+      {
+        "level": 2,
+        "pod": 0.78,
+        "far": 0.31,
+        "csi": 0.58,
+        "bias": 1.13
+      },
+      {
+        "level": 3,
+        "pod": 0.71,
+        "far": 0.24,
+        "csi": 0.58,
+        "bias": 0.93
+      },
+      {
+        "level": 4,
+        "pod": 0.64,
+        "far": 0.18,
+        "csi": 0.56,
+        "bias": 0.78
+      }
+    ],
+    "lead_time_h": {
+      "median": 31.1,
+      "p25": 22.8,
+      "p75": 39.9,
+      "histogram": [
+        2,
+        6,
+        48,
+        76,
+        52,
+        15,
+        1
+      ]
+    }
+  },
+  "events": {
+    "noney_2022": {
+      "name": "Noney (Tupul) landslide",
+      "date": "2022-06-30",
+      "fatalities": 58,
+      "anchor_zone": "MN-NON-002",
+      "timeline": [
+        {
+          "t_hours": -72,
+          "rain_24h_mm": 42,
+          "level": 0,
+          "note": "monsoon background"
+        },
+        {
+          "t_hours": -48,
+          "rain_24h_mm": 96,
+          "level": 1,
+          "note": "antecedent buildup"
+        },
+        {
+          "t_hours": -36,
+          "rain_24h_mm": 148,
+          "level": 3,
+          "note": "SYSTEM HITS L3 WARNING - lead time anchor"
+        },
+        {
+          "t_hours": -24,
+          "rain_24h_mm": 187,
+          "level": 4,
+          "note": "emergency"
+        },
+        {
+          "t_hours": -12,
+          "rain_24h_mm": 214,
+          "level": 4,
+          "note": "slope failure imminent"
+        },
+        {
+          "t_hours": 0,
+          "rain_24h_mm": 231,
+          "level": 4,
+          "note": "landslide event"
+        }
+      ]
+    }
+  }
+}

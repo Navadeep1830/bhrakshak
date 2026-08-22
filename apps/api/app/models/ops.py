@@ -1,0 +1,88 @@
+import uuid
+from datetime import datetime
+
+from geoalchemy2 import Geometry
+from sqlalchemy import (
+    ARRAY,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.models.base import Base, utcnow
+
+
+class CitizenReport(Base):
+    __tablename__ = "citizen_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)  # client-generated => idempotent sync
+    author_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    role: Mapped[str | None] = mapped_column(String(30))  # citizen | field_official
+    category: Mapped[str] = mapped_column(String(30))  # crack|slope_movement|blocked_road|past_slide|water_seepage|other
+    geom: Mapped[object] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
+    description: Mapped[str | None] = mapped_column(Text)
+    media_refs: Mapped[list | None] = mapped_column(ARRAY(Text))  # MinIO keys
+    taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sync_batch: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|verified|rejected
+    verified_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    exif_geo_ok: Mapped[bool | None] = mapped_column(Boolean)  # EXIF GPS vs claimed coords < 500m
+    dup_count: Mapped[int] = mapped_column(Integer, default=0)  # proximity dedupe merges
+    risk_contribution: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    zone_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("zones.id"), index=True)
+    level: Mapped[int] = mapped_column(Integer)  # 1..4
+    message_template: Mapped[str | None] = mapped_column(Text)
+    lang: Mapped[str] = mapped_column(String(10), default="en")
+    channels: Mapped[list | None] = mapped_column(ARRAY(Text))  # sms|push|ivr|siren
+    recipients: Mapped[int] = mapped_column(Integer, default=0)
+    ack_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    ack_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fired_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class RoadStatus(Base):
+    """Current state per OSM way; served as vector tiles by Martin."""
+
+    __tablename__ = "road_status"
+
+    osm_way_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    road_name: Mapped[str | None] = mapped_column(String(160))
+    segment_geom: Mapped[object] = mapped_column(Geometry(geometry_type="LINESTRING", srid=4326))
+    status: Mapped[str] = mapped_column(String(24), default="open")  # open|risk|predicted_blocked|confirmed_blocked
+    source: Mapped[str] = mapped_column(String(20), default="model")  # model|report|official
+    detour_geom: Mapped[object | None] = mapped_column(Geometry(geometry_type="LINESTRING", srid=4326))
+    delay_min: Mapped[int | None] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class DisplacementPoint(Base):
+    """Sentinel-1 PSInSAR persistent scatterer (Layer 3: slow creep)."""
+
+    __tablename__ = "displacement_points"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    geom: Mapped[object] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
+    vel_mm_yr: Mapped[float | None] = mapped_column(Float)
+    p_value: Mapped[float | None] = mapped_column(Float)
+    cluster_id: Mapped[int | None] = mapped_column(Integer, index=True)
+
+
+class DisplacementSeries(Base):
+    __tablename__ = "displacement_series"
+
+    point_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    los_mm: Mapped[float | None] = mapped_column(Float)

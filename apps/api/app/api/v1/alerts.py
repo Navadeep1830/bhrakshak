@@ -1,0 +1,49 @@
+import uuid
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import OPS_ROLES, require_roles
+from app.db.session import get_db
+from app.models import Alert, User
+from app.schemas.schemas import AckIn, AlertOut
+from app.services.risk_engine import LEVEL_NAMES, render_message
+
+router = APIRouter(prefix="/alerts", tags=["alerts"])
+
+
+@router.get("", response_model=list[AlertOut])
+async def list_alerts(limit: int = 100, level_min: int | None = None,
+                      db: AsyncSession = Depends(get_db), _user=Depends(require_roles(*OPS_ROLES))):
+    q = select(Alert).order_by(Alert.fired_at.desc()).limit(limit)
+    if level_min:
+        q = q.where(Alert.level >= level_min)
+    return (await db.execute(q)).scalars().all()
+
+
+@router.post("/{alert_id}/ack", response_model=AlertOut)
+async def ack_alert(alert_id: uuid.UUID, body: AckIn,
+                    db: AsyncSession = Depends(get_db), user: User = Depends(require_roles(*OPS_ROLES))):
+    alert = await db.get(Alert, alert_id)
+    if alert is None:
+        raise HTTPException(404, "Alert not found")
+    alert.ack_by = user.id
+    alert.ack_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(alert)
+    return alert
+
+
+@router.post("/preview-fire")
+async def preview_fire(zone_id: uuid.UUID, level: int = 3, lang: str = "en",
+                       db: AsyncSession = Depends(get_db), _user=Depends(require_roles(*OPS_ROLES))):
+    """Dry-run an alert message for any level/language - the judge-demo button."""
+    from app.models import Zone
+
+    zone = await db.get(Zone, zone_id)
+    if zone is None:
+        raise HTTPException(404, "Zone not found")
+    msg = await render_message(db, f"alert.l{min(max(level,1),4)}", lang, zone.name or zone.zone_code, LEVEL_NAMES[level])
+    return {"zone_code": zone.zone_code, "level": level, "lang": lang, "message": msg}

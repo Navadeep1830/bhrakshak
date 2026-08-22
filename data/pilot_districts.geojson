@@ -1,0 +1,31 @@
+{
+  "type": "FeatureCollection",
+  "note": "APPROXIMATE demo boundaries for offline bootstrapping. Replace via `make data` (GADM/DataMeet download) for production accuracy.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"district": "Aizawl", "state": "Mizoram", "state_code": "MZ", "code": "MZ-AIZ", "context": "Steep urban slopes; high susceptibility; Aizawl city landslide-prone"},
+      "geometry": {"type": "Polygon", "coordinates": [[[92.55,23.45],[92.75,23.40],[93.00,23.50],[93.10,23.70],[93.00,23.95],[92.80,24.05],[92.60,23.95],[92.50,23.75],[92.55,23.45]]]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"district": "East Khasi Hills", "state": "Meghalaya", "state_code": "ML", "code": "ML-EKH", "context": "Sohra/Cherrapunji - world's highest rainfall zone"},
+      "geometry": {"type": "Polygon", "coordinates": [[[91.25,25.05],[91.55,25.00],[91.80,25.10],[92.00,25.35],[91.95,25.65],[91.75,25.80],[91.45,25.75],[91.25,25.50],[91.20,25.25],[91.25,25.05]]]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"district": "Noney", "state": "Manipur", "state_code": "MN", "code": "MN-NON", "context": "Tupul June-2022 tragedy site - backtest anchor event"},
+      "geometry": {"type": "Polygon", "coordinates": [[[93.55,24.85],[93.80,24.80],[94.00,24.90],[94.05,25.10],[93.90,25.25],[93.70,25.20],[93.55,25.05],[93.50,24.95],[93.55,24.85]]]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"district": "Imphal West", "state": "Manipur", "state_code": "MN", "code": "MN-IMP", "context": "Dense urban valley edge paired with Noney hill zone"},
+      "geometry": {"type": "Polygon", "coordinates": [[[93.78,24.66],[93.98,24.68],[94.08,24.82],[94.02,24.98],[93.88,25.02],[93.76,24.92],[93.72,24.78],[93.78,24.66]]]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"district": "Gangtok", "state": "Sikkim", "state_code": "SK", "code": "SK-GNG", "context": "Post-2023 GLOF landslide corridor; NH-10 corridor"},
+      "geometry": {"type": "Polygon", "coordinates": [[[88.35,27.25],[88.50,27.20],[88.65,27.30],[88.70,27.50],[88.60,27.65],[88.45,27.62],[88.35,27.45],[88.32,27.35],[88.35,27.25]]]}
+    }
+  ]
+}
