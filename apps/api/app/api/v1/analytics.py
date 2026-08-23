@@ -45,7 +45,7 @@ async def kpis(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/backtest")
-async def backtest(_user=Depends(get_current_user)):
+async def backtest():
     """POD/FAR/CSI per level + lead-time histogram. COMPUTED by ml/models/backtest.py."""
     if FIXTURE_PATH.exists():
         return json.loads(FIXTURE_PATH.read_text())

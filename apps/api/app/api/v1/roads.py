@@ -17,7 +17,7 @@ BLOCKING_STATUSES = {"predicted_blocked", "confirmed_blocked"}
 
 
 @router.get("/status", response_model=list[RoadStatusOut])
-async def road_status(bbox: str | None = None, db: AsyncSession = Depends(get_db), _user=Depends(get_current_user)):
+async def road_status(bbox: str | None = None, db: AsyncSession = Depends(get_db)):
     q = select(RoadStatus)
     if bbox:
         try:

@@ -9,12 +9,20 @@ import { useAppStore } from "@/store/useAppStore";
 import { DossierDrawer } from "@/components/dossier/DossierDrawer";
 import { KpiBar } from "@/components/kpi/KpiBar";
 import { LayerRail } from "@/components/map/LayerRail";
+import { Legend } from "@/components/map/Legend";
 import { Ticker } from "@/components/ticker/Ticker";
 import { Button } from "@/components/ui/button";
 
 const MapView = dynamic(() => import("@/components/map/MapView"), {
   ssr: false,
-  loading: () => <div className="absolute inset-0 grid place-items-center text-muted">loading terrain…</div>,
+  loading: () => (
+    <div className="absolute inset-0 grid place-items-center">
+      <div className="flex flex-col items-center gap-3 text-muted">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+        <span className="text-sm">loading terrain…</span>
+      </div>
+    </div>
+  ),
 });
 
 export default function CommandCenter() {
@@ -36,29 +44,40 @@ export default function CommandCenter() {
         body: JSON.stringify({ district: "East Khasi Hills", peak_mm_h: 55, hours: 3 }),
       });
       setDemoMode(true);
-      setTimeout(() => window.location.reload(), 2500);
+      setTimeout(() => window.location.reload(), 2200);
+    } catch {
+      alert("Storm injection failed — is the API up at :8000?");
     } finally {
       setInjecting(false);
     }
   }
 
   return (
-    <main className="flex h-screen flex-col">
+    <main className="flex h-screen flex-col overflow-hidden">
       <KpiBar />
       <div className="relative flex-1">
         <MapView />
         <LayerRail />
+        <Legend />
 
         {/* Demo control — the judge button */}
-        <div className="absolute bottom-4 left-3 z-10 flex items-center gap-3 rounded-lg border border-orange-700 bg-panel/90 p-3 backdrop-blur">
-          <Button variant="primary" onClick={injectStorm} disabled={injecting}>
-            {injecting ? "Injecting…" : "⛈ Inject Monsoon Cell (Demo)"}
+        <div className="absolute bottom-4 left-3 z-10 flex items-center gap-3 rounded-xl border border-orange-800 bg-panel/90 p-3 shadow-2xl shadow-black/50 backdrop-blur-md">
+          <Button variant="primary" size="lg" onClick={injectStorm} disabled={injecting}>
+            {injecting ? (
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                Injecting…
+              </span>
+            ) : (
+              "⛈ Inject Monsoon Cell (Demo)"
+            )}
           </Button>
-          <span className="text-xs text-muted">
-            synthetic extreme rainfall → live pipeline → escalation + alerts
-          </span>
+          <p className="max-w-[240px] text-[11px] leading-snug text-muted">
+            synthetic extreme rainfall → live threshold+hysteresis pipeline → escalation &amp;
+            multilingual alerts
+          </p>
           {demoMode && (
-            <span className="rounded bg-orange-900 px-2 py-0.5 text-xs font-bold text-orange-300">
+            <span className="animate-pulse rounded-lg bg-orange-900 px-2 py-1 text-[11px] font-bold text-orange-300">
               DEMO MODE
             </span>
           )}

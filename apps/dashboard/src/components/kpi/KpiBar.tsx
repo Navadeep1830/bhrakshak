@@ -1,13 +1,14 @@
 "use client";
 
+import { AlertTriangle, Radio, Siren, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { apiGet, endpoints, FIXTURE_KPIS } from "@/lib/api";
+import { apiGet } from "@/lib/api";
 import type { KpisOut } from "@/lib/types";
-import { Badge } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export function KpiBar() {
-  const [kpis, setKpis] = useState<KpisOut>(FIXTURE_KPIS);
+  const [kpis, setKpis] = useState<KpisOut | null>(null);
   const [live, setLive] = useState(false);
 
   useEffect(() => {
@@ -25,31 +26,42 @@ export function KpiBar() {
   }, []);
 
   const items = [
-    { label: "Zones at L3/L4", value: kpis.zones_l3_l4, cls: "text-l4" },
-    { label: "Alerts today", value: kpis.alerts_today, cls: "text-l2" },
-    { label: "Pending reports", value: kpis.pending_reports, cls: "text-l1" },
-    { label: "Sensors online", value: kpis.sensors_online, cls: "text-l0" },
+    { icon: Siren, label: "Zones L3/L4", value: kpis?.zones_l3_l4, cls: "text-l4" },
+    { icon: Radio, label: "Alerts (24h)", value: kpis?.alerts_today, cls: "text-l2" },
+    { icon: AlertTriangle, label: "Reports pending", value: kpis?.pending_reports, cls: "text-l1" },
+    { icon: Wifi, label: "Sensors online", value: kpis?.sensors_online, cls: "text-l0" },
   ];
 
   return (
-    <header className="z-20 flex h-14 items-center justify-between border-b border-edge bg-panel px-4">
-      <div className="flex items-center gap-6">
-        <div className="text-base font-bold tracking-tight">
-          Bhu<span className="text-orange-500">Rakshak</span>
-          <span className="ml-2 text-xs font-normal text-muted">Command Center · NER</span>
+    <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-edge bg-panel px-4">
+      <div className="flex items-center gap-7">
+        <div className="flex items-baseline gap-2">
+          <span className="text-lg font-extrabold tracking-tight">
+            Bhu<span className="text-orange-500">Rakshak</span>
+          </span>
+          <span className="hidden rounded bg-edge px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-muted lg:inline">
+            Command Center · NER · SIH26001
+          </span>
         </div>
-        {items.map((i) => (
-          <div key={i.label} className="hidden items-baseline gap-2 md:flex">
-            <span className={`text-xl font-bold ${i.cls}`}>{i.value}</span>
-            <span className="text-xs text-muted">{i.label}</span>
+        {items.map(({ icon: Icon, label, value, cls }) => (
+          <div key={label} className="hidden items-center gap-2 md:flex">
+            <Icon size={15} className={cn(cls, "opacity-80")} />
+            <span className={cn("text-lg font-bold tabular-nums", value == null ? "text-muted" : cls)}>
+              {value ?? "–"}
+            </span>
+            <span className="text-[11px] leading-tight text-muted">{label}</span>
           </div>
         ))}
       </div>
-      <Badge className={live ? "bg-emerald-900 text-l0" : "bg-edge text-muted"}>
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold",
+          live ? "bg-emerald-900/60 text-l0" : "bg-edge text-muted"
+        )}
+      >
+        <span className={cn("h-1.5 w-1.5 rounded-full", live ? "animate-pulse bg-l0" : "bg-muted")} />
         {live ? "LIVE" : "FIXTURE MODE"}
-      </Badge>
+      </div>
     </header>
   );
 }
-
-export const API_BASE = endpoints.API;

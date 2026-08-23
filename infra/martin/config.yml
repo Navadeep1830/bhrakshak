@@ -45,3 +45,13 @@ postgres:
         source: source
         delay_min: delay_min
         road_name: road_name
+    citizen_reports:
+      schema: public
+      table: citizen_reports
+      srid: 4326
+      geometry_column: geom
+      bounds: [88.0, 23.0, 94.6, 28.0]
+      properties:
+        category: category
+        status: status
+        dup_count: dup_count

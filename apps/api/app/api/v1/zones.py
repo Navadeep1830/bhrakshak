@@ -37,7 +37,6 @@ async def list_zones(
     district: str | None = None,
     level_min: int | None = None,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(get_current_user),
 ):
     q = select(Zone)
     if district:
@@ -57,7 +56,7 @@ async def list_zones(
 
 
 @router.get("/{zone_id}/dossier", response_model=ZoneDossier)
-async def zone_dossier(zone_id: uuid.UUID, db: AsyncSession = Depends(get_db), _user=Depends(get_current_user)):
+async def zone_dossier(zone_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     zone = await db.get(Zone, zone_id)
     if zone is None:
         raise HTTPException(404, "Zone not found")
