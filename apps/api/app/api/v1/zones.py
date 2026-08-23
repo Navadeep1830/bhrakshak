@@ -1,5 +1,7 @@
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from geoalchemy2 import functions as gfunc
@@ -13,6 +15,24 @@ from app.schemas.schemas import ZoneDossier, ZoneOut
 from app.services.priority import flood_index, isolation_score
 
 router = APIRouter(prefix="/zones", tags=["zones"])
+
+FIXTURE_PATH = Path("/srv/demo/backtest_fixture.json")
+
+
+def _historical_events() -> list[dict]:
+    """Real event anchors from the backtest fixture until the GSI/COOLR
+    inventory loader lands. Rendered as 'nearby history' in the dossier."""
+    try:
+        fx = json.loads(FIXTURE_PATH.read_text())
+        out = []
+        for key, ev in fx.get("events", {}).items():
+            out.append({
+                "event": key, "name": ev["name"], "date": ev["date"],
+                "fatalities": ev.get("fatalities"), "zone": ev.get("anchor_zone"),
+            })
+        return out
+    except Exception:
+        return []
 
 
 async def _zone_out(db: AsyncSession, z: Zone) -> ZoneOut:
@@ -121,6 +141,6 @@ async def zone_dossier(zone_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         reports=[{"id": str(r.id), "category": r.category, "status": r.status, "created_at": r.created_at.isoformat()} for r in reports],
         alerts=[{"level": a.level, "fired_at": a.fired_at.isoformat(), "message": a.message_template} for a in alerts],
         drivers=drivers,
-        historical_events=[],  # filled by ml/ingest/inventory.py loader
+        historical_events=_historical_events(),
         **out_extra,
     )

@@ -33,7 +33,7 @@ export default function AnalyticsPage() {
   }, []);
 
   return (
-    <div className="h-full overflow-y-auto p-5 [scrollbar-width:thin]">
+    <div className="anim anim-fade h-full overflow-y-auto p-5 [scrollbar-width:thin]" style={{ animationDelay: "0.15s" }}>
       <div className="mx-auto max-w-6xl space-y-5">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Analytics &amp; Backtest</h1>

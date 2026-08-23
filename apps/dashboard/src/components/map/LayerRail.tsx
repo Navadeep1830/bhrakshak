@@ -6,6 +6,7 @@ import { DISTRICT_VIEWS } from "./MapView";
 
 const LAYERS: { key: string; label: string; hint?: string }[] = [
   { key: "risk", label: "Hazard now (Model B)" },
+  { key: "terrain", label: "Terrain relief (3D hillshade)" },
   { key: "susceptibility", label: "Susceptibility (Model A)" },
   { key: "roads", label: "Road status / detours" },
   { key: "reports", label: "Citizen reports" },
@@ -30,7 +31,7 @@ export function LayerRail() {
   };
 
   return (
-    <div className="absolute left-3 top-16 z-10 w-64 space-y-3 rounded-xl border border-edge bg-panel/90 p-3 shadow-2xl shadow-black/40 backdrop-blur-md">
+    <div className="anim anim-fade absolute left-3 top-16 z-10 w-64 space-y-3 rounded-xl border border-white/5 bg-panel/80 p-3 shadow-2xl shadow-black/40 backdrop-blur-md" style={{ animationDelay: "0.7s" }}>
       <div>
         <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted">
           Forecast scrubber

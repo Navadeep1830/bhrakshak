@@ -22,7 +22,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex h-screen flex-col overflow-hidden">
           <KpiBar />
           <TopNav />
-          <div className="relative flex-1 overflow-hidden">{children}</div>
+          <div className="relative flex-1 overflow-hidden">
+            <div className="aurora" aria-hidden />
+            {children}
+          </div>
           <Ticker />
         </main>
       </body>

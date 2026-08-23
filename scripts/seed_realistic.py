@@ -16,7 +16,9 @@ from sqlalchemy import select  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
-from app.models import CitizenReport, RoadStatus, User, Zone  # noqa: E402
+from app.models import CitizenReport, RoadStatus, SensorReading, User, Zone  # noqa: E402
+
+SENSORS_PER_DISTRICT = ["soil-01", "rain-02", "soil-03"]
 
 CATEGORIES = ["crack", "slope_movement", "blocked_road", "past_slide", "water_seepage"]
 
@@ -80,8 +82,29 @@ async def main() -> None:
             road.delay_min = 47
             print("road NH-6 Shillong-Sohra -> predicted_blocked (+47 min detour)")
 
+        # IoT sensor fleet: recent readings so the ops KPI is alive
+        n_sensors = 0
+        now = datetime.now(timezone.utc)
+        seen = set()
+        for z in zones[:12]:
+            for tag in SENSORS_PER_DISTRICT:
+                sid = f"{tag}-{z.zone_code.lower()}"
+                if sid in seen:
+                    continue
+                seen.add(sid)
+                for mins_ago in (2, 6, 14):
+                    db.add(SensorReading(
+                        sensor_id=sid,
+                        ts=now - timedelta(minutes=mins_ago),
+                        zone_id=z.id,
+                        soil_moisture=round(rng.uniform(38, 92), 1),
+                        rainfall_mm=round(max(0.0, rng.gauss(1.8, 2.2)), 2),
+                        battery_pct=float(rng.randint(58, 100)),
+                    ))
+                n_sensors += 1
+
         await db.commit()
-        print(f"inserted {n_reports} realistic reports")
+        print(f"inserted {n_reports} realistic reports + {n_sensors} simulated IoT sensors")
 
 
 if __name__ == "__main__":

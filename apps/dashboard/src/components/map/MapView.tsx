@@ -107,6 +107,26 @@ export default function MapView() {
           '<a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap</a> · <a href="https://carto.com/attributions" target="_blank">© CARTO</a>',
       });
 
+      // --- hillshade relief for real 3D terrain feel (fails silently offline)
+      map.addSource("hillshade-src", {
+        type: "raster-dem",
+        tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        maxzoom: 13,
+        encoding: "terrarium",
+      });
+      map.addLayer({
+        id: "hillshade",
+        type: "hillshade",
+        source: "hillshade-src",
+        paint: {
+          "hillshade-exaggeration": 0.5,
+          "hillshade-shadow-color": "#050A14",
+          "hillshade-highlight-color": "#E2E8F0",
+          "hillshade-accent-color": "#334155",
+        },
+      });
+
       // --- Martin vector sources straight from PostGIS
       for (const src of ["risk_cells", "zones", "road_status", "citizen_reports"]) {
         map.addSource(src, {
@@ -283,6 +303,9 @@ export default function MapView() {
     try {
       vis("risk-fill", layers.risk);
       vis("risk-l4-pulse", layers.risk);
+      if (map.getLayer("hillshade")) {
+        map.setLayoutProperty("hillshade", "visibility", layers.terrain === false ? "none" : "visible");
+      }
       vis("susceptibility-fill", layers.susceptibility);
       vis("roads-line", layers.roads);
       vis("reports-circles", layers.reports);

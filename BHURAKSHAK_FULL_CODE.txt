@@ -1,6 +1,6 @@
 ===============================================================
  BHURAKSHAK - AI LANDSLIDE EARLY WARNING - SIH26001
- Full source dump - 2026-08-23 13:49
+ Full source dump - 2026-08-23 17:23
  Quick start: cp .env.example .env && make up && make migrate && make seed
 ===============================================================
 
@@ -1251,8 +1251,10 @@ async def ws_live(ws: WebSocket):
 ###############################################################
 ## FILE: ./apps/api/app/api/v1/zones.py
 ###############################################################
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from geoalchemy2 import functions as gfunc
@@ -1266,6 +1268,24 @@ from app.schemas.schemas import ZoneDossier, ZoneOut
 from app.services.priority import flood_index, isolation_score
 
 router = APIRouter(prefix="/zones", tags=["zones"])
+
+FIXTURE_PATH = Path("/srv/demo/backtest_fixture.json")
+
+
+def _historical_events() -> list[dict]:
+    """Real event anchors from the backtest fixture until the GSI/COOLR
+    inventory loader lands. Rendered as 'nearby history' in the dossier."""
+    try:
+        fx = json.loads(FIXTURE_PATH.read_text())
+        out = []
+        for key, ev in fx.get("events", {}).items():
+            out.append({
+                "event": key, "name": ev["name"], "date": ev["date"],
+                "fatalities": ev.get("fatalities"), "zone": ev.get("anchor_zone"),
+            })
+        return out
+    except Exception:
+        return []
 
 
 async def _zone_out(db: AsyncSession, z: Zone) -> ZoneOut:
@@ -1374,7 +1394,7 @@ async def zone_dossier(zone_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         reports=[{"id": str(r.id), "category": r.category, "status": r.status, "created_at": r.created_at.isoformat()} for r in reports],
         alerts=[{"level": a.level, "fired_at": a.fired_at.isoformat(), "message": a.message_template} for a in alerts],
         drivers=drivers,
-        historical_events=[],  # filled by ml/ingest/inventory.py loader
+        historical_events=_historical_events(),
         **out_extra,
     )
 
@@ -2813,7 +2833,7 @@ export default function AnalyticsPage() {
   }, []);
 
   return (
-    <div className="h-full overflow-y-auto p-5 [scrollbar-width:thin]">
+    <div className="anim anim-fade h-full overflow-y-auto p-5 [scrollbar-width:thin]" style={{ animationDelay: "0.15s" }}>
       <div className="mx-auto max-w-6xl space-y-5">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Analytics &amp; Backtest</h1>
@@ -3133,6 +3153,8 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 ###############################################################
 ## FILE: ./apps/dashboard/src/app/globals.css
 ###############################################################
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Playfair+Display:ital,wght@1,400;1,500;1,600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -3141,43 +3163,65 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   color-scheme: dark;
 }
 
+* { font-family: 'Inter', system-ui, sans-serif; }
+.font-playfair { font-family: 'Playfair Display', serif; }
+
 body {
-  @apply bg-bg text-ink antialiased;
+  @apply bg-bg text-ink antialiased tracking-[-0.01em];
+}
+
+/* ---------- cinematic entrance system ---------- */
+@keyframes rise { 0%{opacity:0;transform:translateY(26px);filter:blur(12px)} 100%{opacity:1;transform:translateY(0);filter:blur(0)} }
+@keyframes fadeUp { 0%{opacity:0;transform:translateY(16px)} 100%{opacity:1;transform:translateY(0)} }
+@keyframes kenBurns { 0%{transform:scale(1.1)} 100%{transform:scale(1)} }
+@keyframes glowPulse { 0%,100%{opacity:.55} 50%{opacity:1} }
+@keyframes slideInRight { 0%{opacity:0;transform:translateX(36px)} 100%{opacity:1;transform:translateX(0)} }
+
+.anim { opacity:0; animation-fill-mode:forwards; animation-timing-function:cubic-bezier(0.16,1,0.3,1); }
+.anim-rise { animation-name:rise; animation-duration:.9s; }
+.anim-fade { animation-name:fadeUp; animation-duration:.8s; }
+.anim-slide { animation-name:slideInRight; animation-duration:.6s cubic-bezier(0.16,1,0.3,1); }
+.anim-zoom { animation:kenBurns 2s cubic-bezier(0.16,1,0.3,1) forwards; }
+.glow-pulse { animation:glowPulse 2.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce){ .anim,.anim-zoom,.glow-pulse{animation:none!important;opacity:1!important} }
+
+/* ---------- ambient background aurora ---------- */
+.aurora {
+  position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(600px 320px at 18% -10%, rgba(249,115,22,.14), transparent 60%),
+    radial-gradient(700px 380px at 85% 0%, rgba(56,189,248,.10), transparent 60%),
+    radial-gradient(520px 300px at 60% 110%, rgba(168,85,247,.10), transparent 60%);
+}
+
+/* ---------- glass panels ---------- */
+.glass {
+  background: rgba(17,26,44,.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,.07);
 }
 
 .maplibregl-ctrl-attrib {
   background: rgba(11,18,32,0.75) !important;
-  color: #64748B;
-  font-size: 10px;
-  border-radius: 6px 0 0 0;
+  color: #64748B; font-size: 10px; border-radius: 6px 0 0 0;
 }
 .maplibregl-ctrl-attrib a { color: #94A3B8; }
 .maplibregl-ctrl-scale {
-  background: rgba(11,18,32,0.7);
-  border-color: #334155;
-  color: #94A3B8;
+  background: rgba(11,18,32,0.7); border-color: #334155; color: #94A3B8;
 }
-.maplibregl-ctrl-group {
-  background: #111A2C !important;
-}
+.maplibregl-ctrl-group { background: #111A2C !important; }
 .maplibregl-ctrl-group button span { filter: invert(0.85); }
 .maplibregl-popup-content {
-  background: #111A2C;
-  color: #E2E8F0;
-  border: 1px solid #1E293B;
-  border-radius: 10px;
+  background: #111A2C; color: #E2E8F0;
+  border: 1px solid #1E293B; border-radius: 10px;
 }
 .maplibregl-popup-tip { border-top-color: #111A2C !important; }
 
-@keyframes pulse-risk {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
 
 
 ###############################################################
@@ -3207,7 +3251,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex h-screen flex-col overflow-hidden">
           <KpiBar />
           <TopNav />
-          <div className="relative flex-1 overflow-hidden">{children}</div>
+          <div className="relative flex-1 overflow-hidden">
+            <div className="aurora" aria-hidden />
+            {children}
+          </div>
           <Ticker />
         </main>
       </body>
@@ -3233,7 +3280,7 @@ type Tab = "queue" | "alerts";
 export default function OperationsPage() {
   const [tab, setTab] = useState<Tab>("queue");
   return (
-    <div className="h-full overflow-y-auto p-5 [scrollbar-width:thin]">
+    <div className="anim anim-fade h-full overflow-y-auto p-5 [scrollbar-width:thin]" style={{ animationDelay: "0.15s" }}>
       <div className="mx-auto max-w-6xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -3583,7 +3630,7 @@ export default function CommandCenter() {
       <Legend />
 
       {/* Demo control — the judge button */}
-      <div className="absolute bottom-4 left-3 z-10 flex items-center gap-3 rounded-xl border border-orange-800 bg-panel/90 p-3 shadow-2xl shadow-black/50 backdrop-blur-md">
+      <div className="anim anim-fade absolute bottom-4 left-3 z-10 flex items-center gap-3 rounded-xl border border-orange-800 bg-panel/90 p-3 shadow-2xl shadow-black/50 backdrop-blur-md" style={{ animationDelay: "0.9s" }}>
         <Button variant="primary" size="lg" onClick={injectStorm} disabled={injecting}>
           {injecting ? (
             <span className="flex items-center gap-2">
@@ -3658,7 +3705,7 @@ export function DossierDrawer() {
   const [actionTitle, actionBody] = ACTIONS_BY_LEVEL[level] ?? ACTIONS_BY_LEVEL[0];
 
   return (
-    <aside className="absolute right-0 top-14 z-20 flex h-[calc(100%-3.5rem)] w-96 flex-col overflow-y-auto border-l border-edge bg-panel shadow-2xl shadow-black/50 [scrollbar-width:thin]">
+    <aside className="anim-slide absolute right-0 top-12 z-20 flex h-[calc(100%-3.5rem)] w-96 flex-col overflow-y-auto border-l border-white/5 bg-panel shadow-2xl shadow-black/50 [scrollbar-width:thin]">
       <div className="sticky top-0 z-10 border-b border-edge bg-panel/95 p-4 backdrop-blur">
         <div className="flex items-start justify-between">
           <div>
@@ -3818,11 +3865,51 @@ export function DossierDrawer() {
 "use client";
 
 import { AlertTriangle, Radio, Siren, Wifi } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { apiGet } from "@/lib/api";
 import type { KpisOut } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+function useCountUp(target: number | null | undefined, duration = 1100) {
+  const [val, setVal] = useState(0);
+  const prev = useRef(0);
+  useEffect(() => {
+    if (target == null) return;
+    const from = prev.current;
+    const t0 = performance.now();
+    let raf: number;
+    const tick = (now: number) => {
+      const p = Math.min((now - t0) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setVal(from + (target - from) * eased);
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else prev.current = target;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return val;
+}
+
+function Stat({ icon: Icon, label, value, cls }: {
+  icon: typeof Siren; label: string; value: number | null; cls: string;
+}) {
+  const n = useCountUp(value);
+  return (
+    <div className="hidden items-center gap-2.5 md:flex">
+      <span className={cn("grid h-8 w-8 place-items-center rounded-lg bg-bg/80 ring-1 ring-edge", cls)}>
+        <Icon size={15} />
+      </span>
+      <div className="leading-none">
+        <div className={cn("text-lg font-bold tabular-nums tracking-tight", cls)}>
+          {value == null ? "–" : Math.round(n).toLocaleString()}
+        </div>
+        <div className="mt-0.5 text-[10px] font-medium uppercase tracking-widest text-muted">{label}</div>
+      </div>
+    </div>
+  );
+}
 
 export function KpiBar() {
   const [kpis, setKpis] = useState<KpisOut | null>(null);
@@ -3836,47 +3923,39 @@ export function KpiBar() {
         .catch(() => alive && setLive(false));
     load();
     const t = setInterval(load, 15000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
+    return () => { alive = false; clearInterval(t); };
   }, []);
 
   const items = [
-    { icon: Siren, label: "Zones L3/L4", value: kpis?.zones_l3_l4, cls: "text-l4" },
-    { icon: Radio, label: "Alerts (24h)", value: kpis?.alerts_today, cls: "text-l2" },
-    { icon: AlertTriangle, label: "Reports pending", value: kpis?.pending_reports, cls: "text-l1" },
-    { icon: Wifi, label: "Sensors online", value: kpis?.sensors_online, cls: "text-l0" },
+    { icon: Siren, label: "Zones L3/L4", value: kpis?.zones_l3_l4 ?? null, cls: "text-l4" },
+    { icon: Radio, label: "Alerts (24h)", value: kpis?.alerts_today ?? null, cls: "text-l2" },
+    { icon: AlertTriangle, label: "Reports pending", value: kpis?.pending_reports ?? null, cls: "text-l1" },
+    { icon: Wifi, label: "Sensors online", value: kpis?.sensors_online ?? null, cls: "text-l0" },
   ];
 
   return (
-    <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-edge bg-panel px-4">
+    <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-white/5 bg-panel px-4">
       <div className="flex items-center gap-7">
         <div className="flex items-baseline gap-2">
           <span className="text-lg font-extrabold tracking-tight">
             Bhu<span className="text-orange-500">Rakshak</span>
+            <span className="font-playfair italic text-muted"> · भूरक्षक</span>
           </span>
-          <span className="hidden rounded bg-edge px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-muted lg:inline">
-            Command Center · NER · SIH26001
+          <span className="hidden rounded-full bg-edge px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-muted lg:inline">
+            MDoNER · SIH26001
           </span>
         </div>
-        {items.map(({ icon: Icon, label, value, cls }) => (
-          <div key={label} className="hidden items-center gap-2 md:flex">
-            <Icon size={15} className={cn(cls, "opacity-80")} />
-            <span className={cn("text-lg font-bold tabular-nums", value == null ? "text-muted" : cls)}>
-              {value ?? "–"}
-            </span>
-            <span className="text-[11px] leading-tight text-muted">{label}</span>
-          </div>
+        {items.map(({ icon, label, value, cls }) => (
+          <Stat key={label} icon={icon} label={label} value={value} cls={cls} />
         ))}
       </div>
       <div
         className={cn(
-          "flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold",
-          live ? "bg-emerald-900/60 text-l0" : "bg-edge text-muted"
+          "flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-bold ring-1",
+          live ? "bg-emerald-950/70 text-l0 ring-l0/30" : "bg-edge/60 text-muted ring-white/10"
         )}
       >
-        <span className={cn("h-1.5 w-1.5 rounded-full", live ? "animate-pulse bg-l0" : "bg-muted")} />
+        <span className={cn("h-1.5 w-1.5 rounded-full", live ? "glow-pulse bg-l0" : "bg-muted")} />
         {live ? "LIVE" : "FIXTURE MODE"}
       </div>
     </header>
@@ -3895,6 +3974,7 @@ import { DISTRICT_VIEWS } from "./MapView";
 
 const LAYERS: { key: string; label: string; hint?: string }[] = [
   { key: "risk", label: "Hazard now (Model B)" },
+  { key: "terrain", label: "Terrain relief (3D hillshade)" },
   { key: "susceptibility", label: "Susceptibility (Model A)" },
   { key: "roads", label: "Road status / detours" },
   { key: "reports", label: "Citizen reports" },
@@ -3919,7 +3999,7 @@ export function LayerRail() {
   };
 
   return (
-    <div className="absolute left-3 top-16 z-10 w-64 space-y-3 rounded-xl border border-edge bg-panel/90 p-3 shadow-2xl shadow-black/40 backdrop-blur-md">
+    <div className="anim anim-fade absolute left-3 top-16 z-10 w-64 space-y-3 rounded-xl border border-white/5 bg-panel/80 p-3 shadow-2xl shadow-black/40 backdrop-blur-md" style={{ animationDelay: "0.7s" }}>
       <div>
         <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted">
           Forecast scrubber
@@ -4012,7 +4092,7 @@ import { LEVEL_COLORS, LEVEL_NAMES } from "@/lib/utils";
 
 export function Legend() {
   return (
-    <div className="absolute bottom-16 right-3 z-10 rounded-xl border border-edge bg-panel/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md">
+    <div className="anim anim-fade absolute bottom-16 right-3 z-10 rounded-xl border border-white/5 bg-panel/80 p-3 shadow-xl shadow-black/40 backdrop-blur-md" style={{ animationDelay: "1s" }}>
       <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">
         Hazard levels
       </div>
@@ -4150,6 +4230,26 @@ export default function MapView() {
         data: { type: "FeatureCollection", features: [] },
         attribution:
           '<a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap</a> · <a href="https://carto.com/attributions" target="_blank">© CARTO</a>',
+      });
+
+      // --- hillshade relief for real 3D terrain feel (fails silently offline)
+      map.addSource("hillshade-src", {
+        type: "raster-dem",
+        tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        maxzoom: 13,
+        encoding: "terrarium",
+      });
+      map.addLayer({
+        id: "hillshade",
+        type: "hillshade",
+        source: "hillshade-src",
+        paint: {
+          "hillshade-exaggeration": 0.5,
+          "hillshade-shadow-color": "#050A14",
+          "hillshade-highlight-color": "#E2E8F0",
+          "hillshade-accent-color": "#334155",
+        },
       });
 
       // --- Martin vector sources straight from PostGIS
@@ -4328,6 +4428,9 @@ export default function MapView() {
     try {
       vis("risk-fill", layers.risk);
       vis("risk-l4-pulse", layers.risk);
+      if (map.getLayer("hillshade")) {
+        map.setLayoutProperty("hillshade", "visibility", layers.terrain === false ? "none" : "visible");
+      }
       vis("susceptibility-fill", layers.susceptibility);
       vis("roads-line", layers.roads);
       vis("reports-circles", layers.reports);
@@ -4352,8 +4455,9 @@ export default function MapView() {
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BarChart3, ClipboardList } from "lucide-react";
+import { BarChart3, ClipboardList, FileText, LayoutDashboard } from "lucide-react";
 
+import { endpoints } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -4365,31 +4469,39 @@ const TABS = [
 export function TopNav() {
   const pathname = usePathname();
   return (
-    <nav className="z-20 flex h-10 shrink-0 items-center gap-1 border-b border-edge bg-bg/60 px-4">
-      {TABS.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href;
-        return (
-          <Link
-            key={href}
-            href={href}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors",
-              active ? "bg-orange-600 text-white" : "text-muted hover:bg-panel hover:text-ink"
-            )}
-          >
-            <Icon size={14} />
-            {label}
-          </Link>
-        );
-      })}
-      <a
-        href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/briefing/pdf?district=East%20Khasi%20Hills`}
-        target="_blank"
-        rel="noreferrer"
-        className="ml-auto flex items-center gap-2 rounded-lg border border-edge px-3 py-1.5 text-[12px] font-medium text-slate-300 transition-colors hover:border-orange-700 hover:text-white"
-      >
-        📄 DC Briefing PDF
-      </a>
+    <nav className="z-20 flex h-12 shrink-0 items-center justify-between border-b border-white/5 bg-bg/70 px-4">
+      <div className="flex items-center gap-1 rounded-full glass p-1">
+        {TABS.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "relative flex items-center gap-2 rounded-full px-4 py-1.5 text-[13px] font-medium transition-all duration-300",
+                active ? "bg-orange-600 text-white shadow-lg shadow-orange-900/40" : "text-muted hover:bg-white/5 hover:text-ink"
+              )}
+            >
+              <Icon size={14} />
+              {label}
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="hidden font-playfair text-[15px] italic text-slate-400 md:inline">
+          “From reactive response to predictive protection.”
+        </span>
+        <a
+          href={`${endpoints.API}/api/v1/briefing/pdf?district=East%20Khasi%20Hills`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 rounded-full border border-edge px-3.5 py-1.5 text-[12px] font-semibold text-slate-300 transition-all hover:border-orange-600 hover:bg-orange-950/40 hover:text-white"
+        >
+          <FileText size={13} /> DC Briefing
+        </a>
+      </div>
     </nav>
   );
 }
@@ -4731,6 +4843,7 @@ export const useAppStore = create<AppState>((set) => ({
   horizon: "now",
   layers: {
     risk: true,
+    terrain: true,
     susceptibility: false,
     roads: true,
     reports: true,
@@ -7597,7 +7710,9 @@ from sqlalchemy import select  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
-from app.models import CitizenReport, RoadStatus, User, Zone  # noqa: E402
+from app.models import CitizenReport, RoadStatus, SensorReading, User, Zone  # noqa: E402
+
+SENSORS_PER_DISTRICT = ["soil-01", "rain-02", "soil-03"]
 
 CATEGORIES = ["crack", "slope_movement", "blocked_road", "past_slide", "water_seepage"]
 
@@ -7661,8 +7776,29 @@ async def main() -> None:
             road.delay_min = 47
             print("road NH-6 Shillong-Sohra -> predicted_blocked (+47 min detour)")
 
+        # IoT sensor fleet: recent readings so the ops KPI is alive
+        n_sensors = 0
+        now = datetime.now(timezone.utc)
+        seen = set()
+        for z in zones[:12]:
+            for tag in SENSORS_PER_DISTRICT:
+                sid = f"{tag}-{z.zone_code.lower()}"
+                if sid in seen:
+                    continue
+                seen.add(sid)
+                for mins_ago in (2, 6, 14):
+                    db.add(SensorReading(
+                        sensor_id=sid,
+                        ts=now - timedelta(minutes=mins_ago),
+                        zone_id=z.id,
+                        soil_moisture=round(rng.uniform(38, 92), 1),
+                        rainfall_mm=round(max(0.0, rng.gauss(1.8, 2.2)), 2),
+                        battery_pct=float(rng.randint(58, 100)),
+                    ))
+                n_sensors += 1
+
         await db.commit()
-        print(f"inserted {n_reports} realistic reports")
+        print(f"inserted {n_reports} realistic reports + {n_sensors} simulated IoT sensors")
 
 
 if __name__ == "__main__":

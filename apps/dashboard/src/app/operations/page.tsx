@@ -12,7 +12,7 @@ type Tab = "queue" | "alerts";
 export default function OperationsPage() {
   const [tab, setTab] = useState<Tab>("queue");
   return (
-    <div className="h-full overflow-y-auto p-5 [scrollbar-width:thin]">
+    <div className="anim anim-fade h-full overflow-y-auto p-5 [scrollbar-width:thin]" style={{ animationDelay: "0.15s" }}>
       <div className="mx-auto max-w-6xl">
         <div className="mb-4 flex items-center justify-between">
           <div>

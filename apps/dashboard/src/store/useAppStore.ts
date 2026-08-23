@@ -20,6 +20,7 @@ export const useAppStore = create<AppState>((set) => ({
   horizon: "now",
   layers: {
     risk: true,
+    terrain: true,
     susceptibility: false,
     roads: true,
     reports: true,

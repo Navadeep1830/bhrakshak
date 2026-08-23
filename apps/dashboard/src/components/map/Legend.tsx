@@ -4,7 +4,7 @@ import { LEVEL_COLORS, LEVEL_NAMES } from "@/lib/utils";
 
 export function Legend() {
   return (
-    <div className="absolute bottom-16 right-3 z-10 rounded-xl border border-edge bg-panel/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md">
+    <div className="anim anim-fade absolute bottom-16 right-3 z-10 rounded-xl border border-white/5 bg-panel/80 p-3 shadow-xl shadow-black/40 backdrop-blur-md" style={{ animationDelay: "1s" }}>
       <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted">
         Hazard levels
       </div>

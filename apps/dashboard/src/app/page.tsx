@@ -57,7 +57,7 @@ export default function CommandCenter() {
       <Legend />
 
       {/* Demo control — the judge button */}
-      <div className="absolute bottom-4 left-3 z-10 flex items-center gap-3 rounded-xl border border-orange-800 bg-panel/90 p-3 shadow-2xl shadow-black/50 backdrop-blur-md">
+      <div className="anim anim-fade absolute bottom-4 left-3 z-10 flex items-center gap-3 rounded-xl border border-orange-800 bg-panel/90 p-3 shadow-2xl shadow-black/50 backdrop-blur-md" style={{ animationDelay: "0.9s" }}>
         <Button variant="primary" size="lg" onClick={injectStorm} disabled={injecting}>
           {injecting ? (
             <span className="flex items-center gap-2">

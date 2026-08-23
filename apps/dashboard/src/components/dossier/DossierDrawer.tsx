@@ -42,7 +42,7 @@ export function DossierDrawer() {
   const [actionTitle, actionBody] = ACTIONS_BY_LEVEL[level] ?? ACTIONS_BY_LEVEL[0];
 
   return (
-    <aside className="absolute right-0 top-14 z-20 flex h-[calc(100%-3.5rem)] w-96 flex-col overflow-y-auto border-l border-edge bg-panel shadow-2xl shadow-black/50 [scrollbar-width:thin]">
+    <aside className="anim-slide absolute right-0 top-12 z-20 flex h-[calc(100%-3.5rem)] w-96 flex-col overflow-y-auto border-l border-white/5 bg-panel shadow-2xl shadow-black/50 [scrollbar-width:thin]">
       <div className="sticky top-0 z-10 border-b border-edge bg-panel/95 p-4 backdrop-blur">
         <div className="flex items-start justify-between">
           <div>
