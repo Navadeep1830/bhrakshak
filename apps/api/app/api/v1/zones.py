@@ -10,6 +10,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models import Alert, CitizenReport, RainfallObs, RiskCell, SensorReading, Zone
 from app.schemas.schemas import ZoneDossier, ZoneOut
+from app.services.priority import flood_index, isolation_score
 
 router = APIRouter(prefix="/zones", tags=["zones"])
 
@@ -91,6 +92,16 @@ async def zone_dossier(zone_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         )
     ).scalars().all()
 
+    latest_rain = rain[-1] if rain else None
+    out_extra = {
+        "flood_level": flood_index(
+            getattr(latest_rain, "rain_1h", None),
+            getattr(latest_rain, "rain_24h", None),
+            getattr(latest_rain, "soil_moisture", None),
+        ),
+        "isolation": isolation_score(zone.population, zone.road_km, zone.zone_code),
+    }
+
     return ZoneDossier(
         zone=out,
         rainfall_series=[
@@ -111,4 +122,5 @@ async def zone_dossier(zone_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         alerts=[{"level": a.level, "fired_at": a.fired_at.isoformat(), "message": a.message_template} for a in alerts],
         drivers=drivers,
         historical_events=[],  # filled by ml/ingest/inventory.py loader
+        **out_extra,
     )

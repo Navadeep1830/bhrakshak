@@ -7,10 +7,8 @@ import { endpoints } from "@/lib/api";
 import { useAppStore } from "@/store/useAppStore";
 
 import { DossierDrawer } from "@/components/dossier/DossierDrawer";
-import { KpiBar } from "@/components/kpi/KpiBar";
 import { LayerRail } from "@/components/map/LayerRail";
 import { Legend } from "@/components/map/Legend";
-import { Ticker } from "@/components/ticker/Ticker";
 import { Button } from "@/components/ui/button";
 
 const MapView = dynamic(() => import("@/components/map/MapView"), {
@@ -53,39 +51,35 @@ export default function CommandCenter() {
   }
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden">
-      <KpiBar />
-      <div className="relative flex-1">
-        <MapView />
-        <LayerRail />
-        <Legend />
+    <>
+      <MapView />
+      <LayerRail />
+      <Legend />
 
-        {/* Demo control — the judge button */}
-        <div className="absolute bottom-4 left-3 z-10 flex items-center gap-3 rounded-xl border border-orange-800 bg-panel/90 p-3 shadow-2xl shadow-black/50 backdrop-blur-md">
-          <Button variant="primary" size="lg" onClick={injectStorm} disabled={injecting}>
-            {injecting ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                Injecting…
-              </span>
-            ) : (
-              "⛈ Inject Monsoon Cell (Demo)"
-            )}
-          </Button>
-          <p className="max-w-[240px] text-[11px] leading-snug text-muted">
-            synthetic extreme rainfall → live threshold+hysteresis pipeline → escalation &amp;
-            multilingual alerts
-          </p>
-          {demoMode && (
-            <span className="animate-pulse rounded-lg bg-orange-900 px-2 py-1 text-[11px] font-bold text-orange-300">
-              DEMO MODE
+      {/* Demo control — the judge button */}
+      <div className="absolute bottom-4 left-3 z-10 flex items-center gap-3 rounded-xl border border-orange-800 bg-panel/90 p-3 shadow-2xl shadow-black/50 backdrop-blur-md">
+        <Button variant="primary" size="lg" onClick={injectStorm} disabled={injecting}>
+          {injecting ? (
+            <span className="flex items-center gap-2">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              Injecting…
             </span>
+          ) : (
+            "⛈ Inject Monsoon Cell (Demo)"
           )}
-        </div>
-
-        <DossierDrawer />
+        </Button>
+        <p className="max-w-[240px] text-[11px] leading-snug text-muted">
+          synthetic extreme rainfall → live threshold+hysteresis pipeline → escalation &amp;
+          multilingual alerts
+        </p>
+        {demoMode && (
+          <span className="animate-pulse rounded-lg bg-orange-900 px-2 py-1 text-[11px] font-bold text-orange-300">
+            DEMO MODE
+          </span>
+        )}
       </div>
-      <Ticker />
-    </main>
+
+      <DossierDrawer />
+    </>
   );
 }

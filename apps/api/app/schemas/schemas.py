@@ -57,6 +57,8 @@ class ZoneDossier(BaseModel):
     alerts: list[dict]
     drivers: list[dict]  # SHAP-style top contributors
     historical_events: list[dict]
+    flood_level: int = 0
+    isolation: int = 50
 
 
 # ---------- Reports ----------
