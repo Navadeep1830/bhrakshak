@@ -29,6 +29,8 @@ htmlcov/
 *.joblib
 apps/api/app/services/ml_models/
 ml/artifacts/*.pkl
+ml/artifacts/*.parquet
+ml/artifacts/*.csv
 
 # --- local run state ----------------------------------------------------
 autoresearch/daemon.log
