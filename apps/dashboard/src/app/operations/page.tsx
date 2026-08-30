@@ -154,6 +154,34 @@ function Queue() {
                     <b className="text-orange-400">Action: </b>
                     {r.recommended_action}
                   </p>
+                  <div className="mt-3 rounded-lg border border-white/10 bg-black/40 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
+                        DDMA Standard Operating Procedures (SOP)
+                      </span>
+                      <span className="text-[10px] text-muted">
+                        Pop: <b>{(r.population ?? 1200).toLocaleString()}</b> · Vulnerable Elderly: <b>{Math.round((r.population ?? 1200) * 0.08)}</b>
+                      </span>
+                    </div>
+
+                    <div className="mt-2 space-y-1.5 text-[11px]">
+                      {[
+                        { dept: "DC / Revenue", task: `Promulgate Sec 34 (DM Act 2005) evacuation orders for ${r.name ?? r.zone_code}.` },
+                        { dept: "SDRF / NDRF", task: `Pre-position Quick Reaction Teams with satellite VHF comms at choke points.` },
+                        { dept: "PWD / Roads", task: `Stage 2 Heavy JCB Earthmovers for road clearing along arterial corridors.` },
+                        { dept: "Health / CMO", task: `Alert Civil Hospital trauma ward; assign ${Math.max(1, Math.round((r.population ?? 1200) / 400))} mobile ambulances.` },
+                      ].map((sop, idx) => (
+                        <label key={idx} className="flex items-start gap-2 text-slate-300 hover:text-white cursor-pointer">
+                          <input type="checkbox" className="mt-0.5 rounded border-slate-700 bg-slate-800 text-sky-500" defaultChecked={r.hazard_level >= 3 && idx < 2} />
+                          <div>
+                            <span className="rounded bg-white/10 px-1 py-0.2 text-[9px] font-semibold text-sky-300 mr-1.5">{sop.dept}</span>
+                            {sop.task}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="mt-3 flex items-center gap-2">
                     {["SDRF Team 1", "NDRF Platoon", "Local Volunteers"].map((team) => (
                       <button

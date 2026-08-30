@@ -101,9 +101,15 @@ async def priority_rows(db, top_n: int = 25, district: str | None = None) -> lis
         q = q.where(Zone.district == district)
     zones = (await db.execute(q)).scalars().all()
     cells = {c.zone_id: c for c in (await db.execute(select(RiskCell))).scalars().all()}
-    latest_rain: dict[str, float] = {}
-    for ro in (await db.execute(select(RainfallObs).order_by(RainfallObs.ts.desc()).limit(600))).scalars():
-        latest_rain.setdefault(str(ro.zone_id), ro.rain_24h or 0.0)
+    latest_rain_q = (
+        select(RainfallObs.zone_id, RainfallObs.rain_24h)
+        .distinct(RainfallObs.zone_id)
+        .order_by(RainfallObs.zone_id, RainfallObs.ts.desc())
+    )
+    latest_rain = {
+        str(zid): (r24 or 0.0)
+        for zid, r24 in (await db.execute(latest_rain_q)).all()
+    }
 
     rows: list[PriorityRow] = []
     for z in zones:

@@ -59,6 +59,7 @@ class ZoneDossier(BaseModel):
     historical_events: list[dict]
     flood_level: int = 0
     isolation: int = 50
+    dc_directive: dict | None = None
 
 
 # ---------- Reports ----------
@@ -127,6 +128,18 @@ class RoadStatusOut(BaseModel):
     delay_min: int | None
 
 
+class ClearanceEstimate(BaseModel):
+    blocked_corridor: str
+    estimated_debris_volume_m3: float
+    debris_type: str  # "rockfall", "mudflow", "colluvial_slide"
+    jcb_excavators_assigned: int
+    dump_trucks_assigned: int
+    estimated_clearance_hours: float
+    single_lane_restoration_hours: float
+    full_reopening_eta_hours: float
+    machinery_staging_junction: str
+
+
 class DetourOut(BaseModel):
     from_point: list[float]
     to_point: list[float]
@@ -134,6 +147,8 @@ class DetourOut(BaseModel):
     delay_min: int
     geometry: list[list[float]]  # [[lon,lat], ...]
     blocked_segments: list[int]
+    corridor_name: str | None = None
+    clearance_estimate: ClearanceEstimate | None = None
 
 
 # ---------- Demo / Analytics ----------

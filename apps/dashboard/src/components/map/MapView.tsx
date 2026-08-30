@@ -223,6 +223,238 @@ export default function MapView() {
         },
       });
 
+      // Relief Shelters & Critical Infrastructure GeoJSON source
+      map.addSource("shelters", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [
+            { type: "Feature", properties: { name: "Govt Mizo High School Relief Camp", capacity: 850, district: "Aizawl", type: "Shelter" }, geometry: { type: "Point", coordinates: [92.715, 23.732] } },
+            { type: "Feature", properties: { name: "Durtlang Community Hall Shelter", capacity: 600, district: "Aizawl", type: "Shelter" }, geometry: { type: "Point", coordinates: [92.730, 23.785] } },
+            { type: "Feature", properties: { name: "Sohra Civil Hospital Staging Camp", capacity: 700, district: "East Khasi Hills", type: "Hospital/Shelter" }, geometry: { type: "Point", coordinates: [91.720, 25.280] } },
+            { type: "Feature", properties: { name: "Tupul Railway Station Emergency Camp", capacity: 500, district: "Noney", type: "Shelter" }, geometry: { type: "Point", coordinates: [93.680, 24.810] } },
+            { type: "Feature", properties: { name: "Paljor Stadium Emergency Evacuation Shelter", capacity: 1200, district: "Gangtok", type: "Stadium/Shelter" }, geometry: { type: "Point", coordinates: [88.612, 27.332] } },
+          ],
+        },
+      });
+
+      map.addLayer({
+        id: "shelters-points",
+        type: "circle",
+        source: "shelters",
+        paint: {
+          "circle-radius": 8,
+          "circle-color": "#10B981",
+          "circle-stroke-width": 2.2,
+          "circle-stroke-color": "#064E3B",
+        },
+      });
+
+      map.addLayer({
+        id: "shelters-labels",
+        type: "symbol",
+        source: "shelters",
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": 10,
+          "text-offset": [0, 1.4],
+          "text-anchor": "top",
+        },
+        paint: {
+          "text-color": "#6EE7B7",
+          "text-halo-color": "#064E3B",
+          "text-halo-width": 1.5,
+        },
+      });
+
+      // Precipitation Radar Intensity Cells GeoJSON Source
+      map.addSource("radar_cells", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [
+            { type: "Feature", properties: { intensity_mm_h: 62.0, name: "Sohra Cloudburst Cell" }, geometry: { type: "Polygon", coordinates: [[[91.60, 25.20], [91.85, 25.20], [91.85, 25.35], [91.60, 25.35], [91.60, 25.20]]] } },
+            { type: "Feature", properties: { intensity_mm_h: 48.0, name: "Tupul Convective Band" }, geometry: { type: "Polygon", coordinates: [[[93.58, 24.72], [93.78, 24.72], [93.78, 24.90], [93.58, 24.90], [93.58, 24.72]]] } },
+            { type: "Feature", properties: { intensity_mm_h: 36.0, name: "Aizawl Ridge Downpour" }, geometry: { type: "Polygon", coordinates: [[[92.65, 23.68], [92.80, 23.68], [92.80, 23.85], [92.65, 23.85], [92.65, 23.68]]] } },
+            { type: "Feature", properties: { intensity_mm_h: 42.0, name: "Kohima-Zubza Cell" }, geometry: { type: "Polygon", coordinates: [[[94.00, 25.60], [94.18, 25.60], [94.18, 25.75], [94.00, 25.75], [94.00, 25.60]]] } },
+          ],
+        },
+      });
+
+      map.addLayer({
+        id: "radar-cells-fill",
+        type: "fill",
+        source: "radar_cells",
+        paint: {
+          "fill-color": [
+            "interpolate", ["linear"], ["get", "intensity_mm_h"],
+            10, "#10B981",
+            25, "#FBBF24",
+            45, "#F97316",
+            65, "#EF4444",
+            80, "#991B1B"
+          ],
+          "fill-opacity": 0.45,
+        },
+      });
+
+      map.addLayer({
+        id: "radar-cells-outline",
+        type: "line",
+        source: "radar_cells",
+        paint: {
+          "line-color": "#38BDF8",
+          "line-width": 1.5,
+          "line-dasharray": [2, 2],
+        },
+      });
+
+      // Detour polylines, Blockages & Machinery Staging GeoJSON source
+      map.addSource("detours", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [
+            // NH-29 Jotsoma-Medziphema Bypass Detour Polyline
+            {
+              type: "Feature",
+              properties: { name: "NH-29 Jotsoma–Medziphema Emergency Bypass", type: "detour_route", corridor: "NH-29", delay: "+45 min" },
+              geometry: {
+                type: "LineString",
+                coordinates: [[93.85, 25.75], [93.92, 25.62], [94.02, 25.64], [94.05, 25.68]],
+              },
+            },
+            // NH-102 Kakching-Machi Bypass Detour Polyline
+            {
+              type: "Feature",
+              properties: { name: "NH-102 Kakching–Machi Emergency Detour", type: "detour_route", corridor: "NH-102", delay: "+60 min" },
+              geometry: {
+                type: "LineString",
+                coordinates: [[93.95, 24.78], [93.98, 24.62], [94.08, 24.45], [94.15, 24.38]],
+              },
+            },
+            // NH-29 Blockage Point
+            {
+              type: "Feature",
+              properties: { name: "🛑 NH-29 Paglapahar Choke Point (Blocked)", type: "blockage", corridor: "NH-29", eta: "Clearance ETA: 17.6h" },
+              geometry: { type: "Point", coordinates: [93.95, 25.71] },
+            },
+            // NH-102 Blockage Point
+            {
+              type: "Feature",
+              properties: { name: "🛑 NH-102 Tengnoupal Ridge Slip (Blocked)", type: "blockage", corridor: "NH-102", eta: "Clearance ETA: 11.8h" },
+              geometry: { type: "Point", coordinates: [94.05, 24.58] },
+            },
+            // Machinery Staging Bases
+            {
+              type: "Feature",
+              properties: { name: "🚜 Medziphema PWD Heavy Base (2 JCBs)", type: "machinery_base" },
+              geometry: { type: "Point", coordinates: [93.87, 25.755] },
+            },
+            {
+              type: "Feature",
+              properties: { name: "🚜 Pallel BRO Sector Base (4 JCBs)", type: "machinery_base" },
+              geometry: { type: "Point", coordinates: [94.02, 24.52] },
+            },
+          ],
+        },
+      });
+
+      // Detour Route Line Layer (Cyan Dashed Glow)
+      map.addLayer({
+        id: "detour-lines",
+        type: "line",
+        source: "detours",
+        filter: ["==", ["get", "type"], "detour_route"],
+        paint: {
+          "line-color": "#38BDF8",
+          "line-width": 3.6,
+          "line-dasharray": [3, 2],
+        },
+      });
+
+      map.addLayer({
+        id: "detour-labels",
+        type: "symbol",
+        source: "detours",
+        filter: ["==", ["get", "type"], "detour_route"],
+        layout: {
+          "symbol-placement": "line",
+          "text-field": ["concat", ["get", "name"], " (", ["get", "delay"], ")"],
+          "text-size": 10,
+          "text-offset": [0, -1],
+        },
+        paint: {
+          "text-color": "#38BDF8",
+          "text-halo-color": "#0B1220",
+          "text-halo-width": 2,
+        },
+      });
+
+      // Blocked Points Layer (Red)
+      map.addLayer({
+        id: "blockages-points",
+        type: "circle",
+        source: "detours",
+        filter: ["==", ["get", "type"], "blockage"],
+        paint: {
+          "circle-radius": 9,
+          "circle-color": "#EF4444",
+          "circle-stroke-width": 2.5,
+          "circle-stroke-color": "#7F1D1D",
+        },
+      });
+
+      map.addLayer({
+        id: "blockages-labels",
+        type: "symbol",
+        source: "detours",
+        filter: ["==", ["get", "type"], "blockage"],
+        layout: {
+          "text-field": ["concat", ["get", "name"], "\n", ["get", "eta"]],
+          "text-size": 10,
+          "text-offset": [0, 1.6],
+          "text-anchor": "top",
+        },
+        paint: {
+          "text-color": "#FCA5A5",
+          "text-halo-color": "#450A0A",
+          "text-halo-width": 2,
+        },
+      });
+
+      // Machinery Staging Bases Layer (Amber)
+      map.addLayer({
+        id: "machinery-points",
+        type: "circle",
+        source: "detours",
+        filter: ["==", ["get", "type"], "machinery_base"],
+        paint: {
+          "circle-radius": 7,
+          "circle-color": "#F59E0B",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#78350F",
+        },
+      });
+
+      map.addLayer({
+        id: "machinery-labels",
+        type: "symbol",
+        source: "detours",
+        filter: ["==", ["get", "type"], "machinery_base"],
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": 10,
+          "text-offset": [0, 1.4],
+          "text-anchor": "top",
+        },
+        paint: {
+          "text-color": "#FCD34D",
+          "text-halo-color": "#451A03",
+          "text-halo-width": 1.5,
+        },
+      });
+
       // citizen reports
       map.addLayer({
         id: "reports-circles",
@@ -276,6 +508,54 @@ export default function MapView() {
           .addTo(map);
       });
 
+      // Blockages Popup Handler
+      map.on("click", "blockages-points", (e) => {
+        const p = e.features?.[0]?.properties;
+        if (!p) return;
+        new maplibregl.Popup({ closeButton: true })
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="font-family:Inter,sans-serif;font-size:12px;color:#F8FAFC;background:#111A2C;padding:8px;border-radius:6px;border:1px solid #EF4444">
+               <div style="font-weight:bold;color:#F87171;font-size:13px">${p.name}</div>
+               <div style="margin-top:4px;color:#FCA5A5;font-weight:600">${p.eta}</div>
+               <div style="margin-top:4px;font-size:11px;color:#94A3B8">Alternate Route: <b style="color:#38BDF8">Mountain Bypass Active</b></div>
+             </div>`
+          )
+          .addTo(map);
+      });
+
+      // Detour Bypass Popup Handler
+      map.on("click", "detour-lines", (e) => {
+        const p = e.features?.[0]?.properties;
+        if (!p) return;
+        new maplibregl.Popup({ closeButton: true })
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="font-family:Inter,sans-serif;font-size:12px;color:#F8FAFC;background:#111A2C;padding:8px;border-radius:6px;border:1px solid #38BDF8">
+               <div style="font-weight:bold;color:#38BDF8;font-size:13px">🛣️ ${p.name}</div>
+               <div style="margin-top:4px;color:#E2E8F0">Transit Penalty: <b style="color:#FBBF24">${p.delay}</b></div>
+               <div style="margin-top:4px;font-size:11px;color:#6EE7B7">Status: Single-lane emergency convoy cleared ✓</div>
+             </div>`
+          )
+          .addTo(map);
+      });
+
+      // Shelter Popup Handler
+      map.on("click", "shelters-points", (e) => {
+        const p = e.features?.[0]?.properties;
+        if (!p) return;
+        new maplibregl.Popup({ closeButton: true })
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="font-family:Inter,sans-serif;font-size:12px;color:#F8FAFC;background:#111A2C;padding:8px;border-radius:6px;border:1px solid #10B981">
+               <div style="font-weight:bold;color:#34D399;font-size:13px">🏕️ ${p.name}</div>
+               <div style="margin-top:4px;color:#E2E8F0">Capacity: <b>${p.capacity} evacuees</b> (${p.district})</div>
+               <div style="margin-top:4px;font-size:11px;color:#6EE7B7">Medical Trauma Unit Ready · Water Stockpiled ✓</div>
+             </div>`
+          )
+          .addTo(map);
+      });
+
       // expose flyTo for the rail
       (window as unknown as { __flyTo?: (c: number[], z: number) => void }).__flyTo = (
         c: number[],
@@ -309,6 +589,16 @@ export default function MapView() {
       vis("susceptibility-fill", layers.susceptibility);
       vis("roads-line", layers.roads);
       vis("reports-circles", layers.reports);
+      vis("shelters-points", layers.shelters);
+      vis("shelters-labels", layers.shelters);
+      vis("detour-lines", layers.detours);
+      vis("detour-labels", layers.detours);
+      vis("blockages-points", layers.detours);
+      vis("blockages-labels", layers.detours);
+      vis("machinery-points", layers.detours);
+      vis("machinery-labels", layers.detours);
+      vis("radar-cells-fill", layers.rainfall);
+      vis("radar-cells-outline", layers.rainfall);
       if (selectedZoneId) {
         map.setFilter("zone-selected-outline", ["==", ["get", "zone_id"], selectedZoneId]);
       } else {
@@ -318,6 +608,59 @@ export default function MapView() {
       /* layers not ready */
     }
   }, [layers, selectedZoneId]);
+
+  const radarStep = useAppStore((s) => s.radarStep);
+
+  // Dynamic Precipitation Radar Time-Lapse Storm Cell Animation
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const source = map.getSource("radar_cells") as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    const mults = [0.3, 0.4, 0.55, 0.7, 0.85, 0.95, 1.0, 1.15, 1.3, 1.45, 1.2, 0.8];
+    const m = mults[radarStep] ?? 1.0;
+    const dx = (radarStep - 6) * 0.012;
+    const dy = (radarStep - 6) * 0.008;
+
+    source.setData({
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { intensity_mm_h: Math.round(62.0 * m * 10) / 10, name: "Sohra Cloudburst Cell" },
+          geometry: {
+            type: "Polygon",
+            coordinates: [[[91.60 + dx, 25.20 + dy], [91.85 + dx, 25.20 + dy], [91.85 + dx, 25.35 + dy], [91.60 + dx, 25.35 + dy], [91.60 + dx, 25.20 + dy]]],
+          },
+        },
+        {
+          type: "Feature",
+          properties: { intensity_mm_h: Math.round(48.0 * m * 10) / 10, name: "Tupul Convective Band" },
+          geometry: {
+            type: "Polygon",
+            coordinates: [[[93.58 + dx, 24.72 + dy], [93.78 + dx, 24.72 + dy], [93.78 + dx, 24.90 + dy], [93.58 + dx, 24.90 + dy], [93.58 + dx, 24.72 + dy]]],
+          },
+        },
+        {
+          type: "Feature",
+          properties: { intensity_mm_h: Math.round(36.0 * m * 10) / 10, name: "Aizawl Ridge Downpour" },
+          geometry: {
+            type: "Polygon",
+            coordinates: [[[92.65 + dx, 23.68 + dy], [92.80 + dx, 23.68 + dy], [92.80 + dx, 23.85 + dy], [92.65 + dx, 23.85 + dy], [92.65 + dx, 23.68 + dy]]],
+          },
+        },
+        {
+          type: "Feature",
+          properties: { intensity_mm_h: Math.round(42.0 * m * 10) / 10, name: "Kohima-Zubza Cell" },
+          geometry: {
+            type: "Polygon",
+            coordinates: [[[94.00 + dx, 25.60 + dy], [94.18 + dx, 25.60 + dy], [94.18 + dx, 25.75 + dy], [94.00 + dx, 25.75 + dy], [94.00 + dx, 25.60 + dy]]],
+          },
+        },
+      ],
+    });
+  }, [radarStep]);
 
   return <div ref={container} className="absolute inset-0" />;
 }

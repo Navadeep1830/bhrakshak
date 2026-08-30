@@ -21,11 +21,13 @@ export const FIXTURE_KPIS = {
   total_zones: 45,
 };
 
-export const FIXTURE_DRIVERS = [
-  { feature: "7-day rainfall", value: "412 mm", contribution: 0.21 },
-  { feature: "slope", value: "38 deg", contribution: 0.14 },
-  { feature: "susceptibility class", value: "High", contribution: 0.12 },
-  { feature: "soil moisture", value: "91 %", contribution: 0.09 },
+import type { Driver } from "./types";
+
+export const FIXTURE_DRIVERS: Driver[] = [
+  { feature: "72h Antecedent Rain", name: "72h Antecedent Saturation", value: "312.4 mm", val_num: 312.4, contribution: 0.38, description: "Deep subsurface pore-pressure accumulation" },
+  { feature: "1h Flash Intensity", name: "1h Peak Downpour", value: "28.5 mm/h", val_num: 28.5, contribution: 0.26, description: "Rapid surface runoff triggering shear failure" },
+  { feature: "Slope & Susceptibility", name: "Terrain Susceptibility Index", value: "78.4 / 100", val_num: 78.4, contribution: 0.22, description: "Steep cut-slope morphology and weak lithology" },
+  { feature: "Soil Saturation", name: "Soil Moisture Level", value: "86.2%", val_num: 86.2, contribution: 0.14, description: "Topsoil saturation approaching liquid limit" },
 ];
 
 export const FIXTURE_RAINFALL = Array.from({ length: 48 }, (_, i) => ({

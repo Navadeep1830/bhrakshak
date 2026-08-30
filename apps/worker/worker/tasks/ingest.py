@@ -45,70 +45,69 @@ def _synthetic_hourly(n: int = 168) -> list[float]:
 
 
 async def _poll_all() -> int:
-    zones = (await _get_zones()).scalars().all()
+    from geoalchemy2 import functions as gfunc
+
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     written = 0
-    for z in zones:
-        lat, lon = await _zone_centroid(z.id)
-        data = await _fetch_open_meteo(lat, lon) if lat else None
-        hourly: list[float]
-        soil: list[float] | None = None
-        if data and "hourly" in data:
-            hourly = data["hourly"].get("precipitation") or []
-            soil = data["hourly"].get("soil_moisture_3_to_9cm")
-        else:
-            hourly = _synthetic_hourly()
-        if not hourly:
-            continue
-        async with SessionLocal() as db:
-            for i, mm in enumerate(hourly[-72:]):
-                ts = now - timedelta(hours=len(hourly[-72:]) - 1 - i)
-                # cumulative windows over the tail we have
-                tail = hourly[-72:]
+
+    async with SessionLocal() as db:
+        zone_rows = (
+            await db.execute(
+                select(
+                    Zone,
+                    gfunc.ST_Y(gfunc.ST_Centroid(Zone.geom)),
+                    gfunc.ST_X(gfunc.ST_Centroid(Zone.geom)),
+                )
+            )
+        ).all()
+
+        for z, lat, lon in zone_rows:
+            lat_f = float(lat) if lat is not None else None
+            lon_f = float(lon) if lon is not None else None
+            data = await _fetch_open_meteo(lat_f, lon_f) if lat_f and lon_f else None
+            
+            hourly: list[float]
+            soil: list[float] | None = None
+            if data and "hourly" in data:
+                hourly = data["hourly"].get("precipitation") or []
+                soil = data["hourly"].get("soil_moisture_3_to_9cm")
+            else:
+                hourly = _synthetic_hourly()
+            if not hourly:
+                continue
+
+            tail = hourly[-72:]
+            for i, mm in enumerate(tail):
+                ts = now - timedelta(hours=len(tail) - 1 - i)
                 idx = i
                 r24 = round(sum(tail[max(0, idx - 23): idx + 1]), 2)
                 r48 = round(sum(tail[max(0, idx - 47): idx + 1]), 2)
                 r72 = round(sum(tail), 2)
                 eff = round(sum(m * (0.5 ** (k / 48)) for k, m in enumerate(reversed(tail[: idx + 1]))), 2)
-                sm = None
-                if soil and idx < len(soil):
-                    sm = soil[idx]
+                sm = soil[idx] if soil and idx < len(soil) else None
+
                 exists = await db.execute(
                     select(RainfallObs).where(RainfallObs.zone_id == z.id, RainfallObs.ts == ts)
                 )
                 if exists.scalar_one_or_none():
                     continue
+
                 db.add(
                     RainfallObs(
-                        ts=ts, zone_id=z.id, rain_1h=float(mm),
-                        rain_24h=r24, rain_48h=r48, rain_72h=r72, rain_7d=r72,
-                        eff_rain=eff, soil_moisture=sm,
+                        ts=ts,
+                        zone_id=z.id,
+                        rain_1h=float(mm),
+                        rain_24h=r24,
+                        rain_48h=r48,
+                        rain_72h=r72,
+                        rain_7d=r72,
+                        eff_rain=eff,
+                        soil_moisture=sm,
                     )
                 )
                 written += 1
-            await db.commit()
+        await db.commit()
     return written
-
-
-from sqlalchemy import Select  # noqa: E402
-
-
-async def _get_zones() -> Select:
-    return select(Zone)
-
-
-async def _zone_centroid(zone_id) -> tuple[float | None, float | None]:
-    from geoalchemy2 import functions as gfunc
-
-    async with SessionLocal() as db:
-        row = (
-            await db.execute(
-                select(gfunc.ST_Y(gfunc.ST_Centroid(Zone.geom)), gfunc.ST_X(gfunc.ST_Centroid(Zone.geom))).where(
-                    Zone.id == zone_id
-                )
-            )
-        ).first()
-        return (float(row[0]), float(row[1])) if row else (None, None)
 
 
 @celery_app.task(name="tasks.poll_rainfall")

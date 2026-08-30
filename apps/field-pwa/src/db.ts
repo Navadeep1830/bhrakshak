@@ -8,6 +8,8 @@ export interface QueuedReport {
   description?: string;
   taken_at?: string;
   photo_b64?: string;
+  audio_b64?: string;
+  audio_duration_sec?: number;
   status: "pending" | "synced" | "flagged";
   created_at: string;
 }
@@ -54,6 +56,11 @@ export async function syncQueue(apiUrl: string): Promise<{ sent: number }> {
       lon: r.lon ?? 0,
       description: r.description ?? null,
       taken_at: r.taken_at ?? null,
+      media_refs: [
+        ...(r.photo_b64 ? [r.photo_b64] : []),
+        ...(r.audio_b64 ? [r.audio_b64] : []),
+      ],
+      exif_geo_ok: r.lat !== null && r.lon !== null,
     })),
   };
   try {

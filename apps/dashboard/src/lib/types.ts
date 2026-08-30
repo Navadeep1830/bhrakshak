@@ -6,10 +6,37 @@ export interface KpisOut {
   total_zones: number;
 }
 
+export interface DdmaSop {
+  dept: string;
+  task: string;
+}
+
+export interface DcDirective {
+  level: number;
+  urgency: string;
+  headline: string;
+  evacuation_plan: string;
+  ndrf_deployment: string;
+  machinery_positioning: string;
+  traffic_advisory: string;
+  medical_standby: string;
+  demographics?: {
+    total_population: number;
+    elderly_count: number;
+    children_under_5: number;
+    special_needs: number;
+    ambulances_assigned: number;
+  };
+  ddma_sop_checklist?: DdmaSop[];
+}
+
 export interface Driver {
   feature: string;
+  name?: string;
   value: string | number;
+  val_num?: number;
   contribution: number;
+  description?: string;
 }
 
 export interface ZoneOut {
@@ -28,14 +55,15 @@ export interface ZoneOut {
 
 export interface Dossier {
   zone: ZoneOut;
-  rainfall_series: { ts: string; rain_1h: number | null; rain_24h: number | null }[];
+  rainfall_series: { ts: string; rain_1h: number | null; rain_24h: number | null; eff_rain?: number | null; soil_moisture?: number | null }[];
   sensors: { sensor_id: string; ts: string; soil_moisture: number | null }[];
   reports: { id: string; category: string; status: string; created_at: string }[];
   alerts: { level: number; fired_at: string; message: string }[];
-  drivers: { feature: string; value: number; contribution: number }[];
+  drivers: Driver[];
   historical_events: unknown[];
   flood_level?: number;
   isolation?: number;
+  dc_directive?: DcDirective | null;
 }
 
 export interface TickerEvent {

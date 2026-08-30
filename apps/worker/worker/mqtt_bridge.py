@@ -30,26 +30,79 @@ async def handle_message(topic: str, payload: bytes) -> None:
         log.warning("bad payload on %s: %s", topic, e)
         return
 
+    from app.services.geotech import calculate_factor_of_safety
+
     async with SessionLocal() as db:
         zone_id = data.get("zone_id")
+        z_obj = None
         if zone_id is not None:
             from app.models import Zone
 
-            zid = await db.execute(select(Zone.id).where(Zone.zone_code == zone_id))
-            zone_id = zid.scalar_one_or_none()
+            res = await db.execute(select(Zone).where(Zone.zone_code == zone_id))
+            z_obj = res.scalar_one_or_none()
+            zone_id_uuid = z_obj.id if z_obj else None
+        else:
+            zone_id_uuid = None
+
+        # Geotechnical Parameter Extraction
+        soil_m = data.get("soil_moisture") or data.get("vwc_pct")
+        pore_p = data.get("pore_pressure_kpa") or data.get("pore_kpa")
+        tilt_x = data.get("tilt_x_deg")
+        tilt_y = data.get("tilt_y_deg")
+        tilt_rate = data.get("tilt_rate_deg_h")
+        slope_angle = float(z_obj.susc_mean * 0.6 if z_obj and z_obj.susc_mean else 35.0)
+
+        fos = calculate_factor_of_safety(
+            slope_angle_deg=slope_angle,
+            pore_pressure_kpa=pore_p,
+            volumetric_water_content=soil_m,
+        )
+
+        extra_data = {
+            "topic": topic,
+            "pore_pressure_kpa": pore_p,
+            "tilt_x_deg": tilt_x,
+            "tilt_y_deg": tilt_y,
+            "tilt_rate_deg_h": tilt_rate,
+            "factor_of_safety": fos,
+        }
+
         db.add(
             SensorReading(
                 sensor_id=data["sensor_id"],
                 ts=datetime.now(timezone.utc),
-                zone_id=zone_id,
-                soil_moisture=data.get("soil_moisture"),
-                rainfall_mm=data.get("rainfall_mm"),
-                battery_pct=data.get("battery_pct"),
-                extra={"topic": topic},
+                zone_id=zone_id_uuid,
+                soil_moisture=float(soil_m) if soil_m is not None else None,
+                rainfall_mm=float(data["rainfall_mm"]) if "rainfall_mm" in data else None,
+                battery_pct=float(data["battery_pct"]) if "battery_pct" in data else None,
+                extra=extra_data,
             )
         )
         await db.commit()
-    await publish_live("sensor", {"topic": topic, **data})
+
+    # Live Pub/Sub broadcast
+    await publish_live(
+        "sensor",
+        {
+            "topic": topic,
+            "factor_of_safety": fos,
+            **data,
+        },
+    )
+
+    # If Factor of Safety drops below critical threshold, broadcast urgent geotechnical alarm
+    if fos < 1.30:
+        await publish_live(
+            "geotech_alarm",
+            {
+                "sensor_id": data["sensor_id"],
+                "zone_code": data.get("zone_id"),
+                "factor_of_safety": fos,
+                "urgency": "IMMINENT SLIP FAILURE" if fos < 1.05 else "CRITICAL ACCELERATING CREEP",
+                "pore_pressure_kpa": pore_p,
+                "tilt_rate_deg_h": tilt_rate,
+            },
+        )
 
 
 def run_bridge() -> None:

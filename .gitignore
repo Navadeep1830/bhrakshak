@@ -17,3 +17,26 @@ flower.log*
 .coverage
 htmlcov/
 .DS_Store
+
+# --- trained artefacts --------------------------------------------------
+# Model bundles are build products: multi-MB binaries that bloat every clone
+# and silently go stale against the training code. They are produced by the
+# ml/pipeline/ scripts and must be regenerated, not committed. Committing them
+# also hid their provenance -- the versions this repo shipped were trained on
+# autoresearch's synthetic labels and were being served by
+# risk_engine.get_model_b_bundle() as though they were real.
+*.pkl
+*.joblib
+apps/api/app/services/ml_models/
+ml/artifacts/*.pkl
+
+# --- local run state ----------------------------------------------------
+autoresearch/daemon.log
+autoresearch/data/
+autoresearch/experiments.jsonl
+autoresearch/best_result.json
+autoresearch/train.py.best_backup
+ml/cache/
+data/raw/
+scripts/tupul_sim_output.json
+.workbuddy-ai/

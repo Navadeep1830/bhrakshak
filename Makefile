@@ -37,8 +37,17 @@ data: ## Build offline-safe synthetic ML datasets + fixtures (real downloads opt
 
 demo: ## Full scripted demo state: realistic seed -> storm injection -> metrics fixture check
 	$(COMPOSE) run --rm seed python /srv/scripts/seed_realistic.py
-	$(COMPOSE) exec api python /srv/demo/storm_injector.py --district East Khasi Hills || true
+	$(COMPOSE) exec api python /srv/demo/storm_injector.py --district "East Khasi Hills" || true
 	@echo "Open http://localhost:3000 and press 'Inject Monsoon Cell'."
+
+replay: ## Run 90-second interactive June 2022 Tupul landslide simulation replay
+	/home/sudpy/Projects/Bhrakshak/.venv/bin/python demo/replay_tupul_disaster.py
+
+simulate-tupul: ## Run 15-minute time-lapse June 2022 Tupul Manipur disaster simulation
+	/home/sudpy/Projects/Bhrakshak/.venv/bin/python scripts/simulate_tupul.py
+
+simulate-lorawan: ## Run virtual ESP32/LoRaWAN edge sensor telemetry publishing simulation
+	/home/sudpy/Projects/Bhrakshak/.venv/bin/python scripts/simulate_lorawan.py --iterations 6 --interval 0.2
 
 test: ## Run API tests against the running stack
 	$(COMPOSE) exec api pytest -q /srv/apps/api/tests

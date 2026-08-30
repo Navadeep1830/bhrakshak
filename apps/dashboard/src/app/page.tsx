@@ -9,6 +9,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { DossierDrawer } from "@/components/dossier/DossierDrawer";
 import { LayerRail } from "@/components/map/LayerRail";
 import { Legend } from "@/components/map/Legend";
+import { RadarSlider } from "@/components/map/RadarSlider";
 import { Button } from "@/components/ui/button";
 
 const MapView = dynamic(() => import("@/components/map/MapView"), {
@@ -79,6 +80,7 @@ export default function CommandCenter() {
         )}
       </div>
 
+      <RadarSlider />
       <DossierDrawer />
     </>
   );

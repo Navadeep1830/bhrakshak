@@ -1,0 +1,60 @@
+{
+  "generated_at": "2026-08-29T17:10:31.495560+00:00",
+  "source": "NASA Global Landslide Catalog (GLC) export",
+  "source_url": "https://data.nasa.gov/docs/legacy/Global_Landslide_Catalog_Export/Global_Landslide_Catalog_Export_rows.csv",
+  "n_events": 74,
+  "n_rain_triggered": 64,
+  "date_range": [
+    "2007-04-11 00:00:00+00:00",
+    "2017-07-10 12:55:00+00:00"
+  ],
+  "fatalities_total": 63,
+  "by_aoi": [
+    {
+      "aoi_code": "ML-EKH",
+      "n_events": 12,
+      "n_rain_triggered": 8,
+      "fatalities": 24,
+      "first": "2007-07-26 00:00:00+00:00",
+      "last": "2017-06-17 18:45:00+00:00"
+    },
+    {
+      "aoi_code": "MN-IMP",
+      "n_events": 8,
+      "n_rain_triggered": 8,
+      "fatalities": 6,
+      "first": "2008-06-09 00:00:00+00:00",
+      "last": "2017-07-09 13:23:00+00:00"
+    },
+    {
+      "aoi_code": "MN-NON",
+      "n_events": 10,
+      "n_rain_triggered": 9,
+      "fatalities": 1,
+      "first": "2007-08-26 00:00:00+00:00",
+      "last": "2017-06-30 15:17:00+00:00"
+    },
+    {
+      "aoi_code": "MZ-AIZ",
+      "n_events": 20,
+      "n_rain_triggered": 17,
+      "fatalities": 31,
+      "first": "2009-10-05 00:00:00+00:00",
+      "last": "2017-06-28 16:00:00+00:00"
+    },
+    {
+      "aoi_code": "SK-GNG",
+      "n_events": 24,
+      "n_rain_triggered": 22,
+      "fatalities": 1,
+      "first": "2007-04-11 00:00:00+00:00",
+      "last": "2017-07-10 12:55:00+00:00"
+    }
+  ],
+  "by_match": {
+    "inside": 67,
+    "near": 7
+  },
+  "near_buffer_km": 25.0,
+  "synthetic": false
+}

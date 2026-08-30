@@ -1,6 +1,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 
+import { EdgeVisionInspector, type FissureAnalysisResult } from "./components/EdgeVisionInspector";
+import { VoiceRecorder } from "./components/VoiceRecorder";
 import { db, queueReport, syncQueue } from "./db";
 import { LANGS, makeT, type LangCode } from "./i18n";
 
@@ -53,6 +55,9 @@ export default function App() {
         </div>
       )}
 
+      {/* Emergency Multi-Lingual Broadcast Banner */}
+      <EmergencyBroadcastBanner t={t} lang={lang} />
+
       <CitizenBanner t={t} online={online} />
 
       <ReportSection t={t} />
@@ -65,6 +70,46 @@ export default function App() {
         }}
       />
     </div>
+  );
+}
+
+function EmergencyBroadcastBanner({ t, lang }: { t: ReturnType<typeof makeT>; lang: LangCode }) {
+  const alertText = t("emergency_alert");
+
+  function speakAlert() {
+    if (!window.speechSynthesis) {
+      alert("Text-to-speech not supported on this browser.");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(alertText);
+    if (lang === "hi") utterance.lang = "hi-IN";
+    else if (lang === "bn") utterance.lang = "bn-IN";
+    else if (lang === "ne") utterance.lang = "ne-NP";
+    else utterance.lang = "en-IN";
+    window.speechSynthesis.speak(utterance);
+  }
+
+  return (
+    <section className="mb-4 rounded-xl border border-red-600/80 bg-red-950/70 p-3.5 shadow-lg shadow-red-950/40">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2.5 w-2.5 animate-ping rounded-full bg-red-400" />
+          <span className="text-xs font-black uppercase tracking-wider text-red-300">
+            EMERGENCY BROADCAST (DDMA)
+          </span>
+        </div>
+        <button
+          onClick={speakAlert}
+          className="flex items-center gap-1 rounded bg-red-900/80 px-2 py-1 text-[11px] font-bold text-red-200 ring-1 ring-red-500/50 hover:bg-red-800"
+        >
+          🔊 Read Aloud
+        </button>
+      </div>
+      <p className="mt-2 text-xs font-semibold leading-relaxed text-red-100">
+        {alertText}
+      </p>
+    </section>
   );
 }
 
@@ -123,7 +168,18 @@ function CitizenBanner({ t, online }: { t: ReturnType<typeof makeT>; online: boo
 function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
   const [category, setCategory] = useState<string>("crack");
   const [description, setDescription] = useState("");
+  const [photoB64, setPhotoB64] = useState<string | null>(null);
+  const [audioB64, setAudioB64] = useState<string | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
   const [saved, setSaved] = useState(false);
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPhotoB64(reader.result as string);
+    reader.readAsDataURL(file);
+  }
 
   async function save() {
     let lat: number | null = null;
@@ -139,9 +195,20 @@ function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
         { timeout: 6000 }
       );
     });
-    await queueReport({ category, lat, lon, description: description || undefined });
+    await queueReport({
+      category,
+      lat,
+      lon,
+      description: description || undefined,
+      photo_b64: photoB64 || undefined,
+      audio_b64: audioB64 || undefined,
+      audio_duration_sec: audioDuration || undefined,
+    });
     navigator.vibrate?.(120);
     setDescription("");
+    setPhotoB64(null);
+    setAudioB64(null);
+    setAudioDuration(0);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
@@ -162,6 +229,52 @@ function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
           </button>
         ))}
       </div>
+
+      <div className="mt-3">
+        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 bg-[#0B1220] p-2.5 text-xs text-slate-300 hover:border-orange-500">
+          <span>📸 {photoB64 ? "Photo Attached ✓" : t("photo")}</span>
+          <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
+        </label>
+      </div>
+
+      {photoB64 && (
+        <div className="mt-2.5 space-y-2">
+          <div className="flex items-center justify-between text-xs text-emerald-400">
+            <span>Photo attached (Base64 JPEG)</span>
+            <button onClick={() => setPhotoB64(null)} className="text-rose-400 hover:underline">
+              Remove
+            </button>
+          </div>
+          <EdgeVisionInspector
+            imageSrc={photoB64}
+            onAnalysisComplete={(res) => {
+              if (res.structuralRisk !== "SAFE" && !description.includes("Fissure density")) {
+                setDescription(
+                  (prev) =>
+                    `${prev ? prev + " | " : ""}[Edge CV Analysis: ${res.structuralRisk.replace(/_/g, " ")} | Fissure density: ${res.fissureDensityPct}% | Max crack: ${res.maxCrackWidthPx}px]`
+                );
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* Dedicated Offline Voice Note Recorder */}
+      <div className="mt-3">
+        <VoiceRecorder
+          onAudioRecorded={(b64, dur) => {
+            setAudioB64(b64);
+            setAudioDuration(dur);
+          }}
+          onAudioCleared={() => {
+            setAudioB64(null);
+            setAudioDuration(0);
+          }}
+          initialAudioB64={audioB64 || undefined}
+          initialDurationSec={audioDuration}
+        />
+      </div>
+
       <textarea
         value={description}
         onChange={(e) => setDescription(e.target.value)}
@@ -172,7 +285,7 @@ function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
       <button onClick={save} className="mt-3 w-full rounded-lg bg-orange-600 py-4 text-lg font-bold active:bg-orange-700">
         {t("save")}
       </button>
-      {saved && <p className="mt-2 text-center text-sm text-emerald-400">✓ Saved — will sync</p>}
+      {saved && <p className="mt-2 text-center text-sm text-emerald-400">✓ Saved to offline queue — will sync</p>}
     </section>
   );
 }

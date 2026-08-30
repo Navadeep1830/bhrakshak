@@ -1,0 +1,16 @@
+{
+  "aizawl_city_slopes": {
+    "points": 1500,
+    "flagged": 149,
+    "creep_clusters": 4,
+    "median_vel_mm_yr": 0.28,
+    "synthetic": true
+  },
+  "nh10_sikkim_corridor": {
+    "points": 1500,
+    "flagged": 146,
+    "creep_clusters": 2,
+    "median_vel_mm_yr": 0.33,
+    "synthetic": true
+  }
+}

@@ -19,28 +19,25 @@ DEDUP_WINDOW_H = 1
 
 
 async def _find_duplicate(db: AsyncSession, lat: float, lon: float, category: str) -> CitizenReport | None:
-    """Proximity dedupe: <50m, <1h, same category -> merge into existing report."""
+    """Proximity dedupe using PostGIS: <50m, <1h, same category -> merge into existing report."""
     since = datetime.now(timezone.utc) - timedelta(hours=DEDUP_WINDOW_H)
-    # bounding box prefilter (~0.0005 deg ~ 55m at these latitudes)
-    rows = (
-        await db.execute(
-            select(CitizenReport).where(
-                CitizenReport.category == category,
-                CitizenReport.created_at >= since,
-            )
+    pt = WKTElement(f"POINT({lon} {lat})", srid=4326)
+    q = (
+        select(CitizenReport)
+        .where(
+            CitizenReport.category == category,
+            CitizenReport.created_at >= since,
+            func.ST_DWithin(
+                func.ST_Transform(CitizenReport.geom, 3857),
+                func.ST_Transform(pt, 3857),
+                DEDUP_RADIUS_M,
+            ),
         )
-    ).scalars().all()
-    for r in rows:
-        pt = db.execute(
-            select(func.ST_X(CitizenReport.geom), func.ST_Y(CitizenReport.geom)).where(CitizenReport.id == r.id)
-        )
-        res = (await pt).first()
-        if res is None:
-            continue
-        lon2, lat2 = float(res[0]), float(res[1])
-        if _haversine_m(lat, lon, lat2, lon2) < DEDUP_RADIUS_M:
-            return r
-    return None
+        .order_by(CitizenReport.created_at.desc())
+        .limit(1)
+    )
+    res = await db.execute(q)
+    return res.scalar_one_or_none()
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -113,25 +110,28 @@ async def _upsert_report(db: AsyncSession, item: ReportIn, user: User, sync_batc
     await db.commit()
     await db.refresh(report)
     out = ReportOut.model_validate(report)
-    row = (await db.execute(select(func.ST_X(CitizenReport.geom), func.ST_Y(CitizenReport.geom)).where(CitizenReport.id == report.id))).first()
-    if row:
-        out.lon, out.lat = float(row[0]), float(row[1])
+    out.lon = float(item.lon)
+    out.lat = float(item.lat)
     return out
 
 
 @router.get("", response_model=list[ReportOut])
 async def list_reports(status_filter: str | None = "pending", limit: int = 100,
                        db: AsyncSession = Depends(get_db), user: User = Depends(require_roles(*STAFF_ROLES))):
-    q = select(CitizenReport).order_by(CitizenReport.created_at.desc()).limit(limit)
+    q = select(
+        CitizenReport,
+        func.ST_X(CitizenReport.geom),
+        func.ST_Y(CitizenReport.geom),
+    ).order_by(CitizenReport.created_at.desc()).limit(limit)
     if status_filter:
         q = q.where(CitizenReport.status == status_filter)
-    rows = (await db.execute(q)).scalars().all()
+    rows = (await db.execute(q)).all()
     outs = []
-    for r in rows:
+    for r, lon, lat in rows:
         o = ReportOut.model_validate(r)
-        row = (await db.execute(select(func.ST_X(CitizenReport.geom), func.ST_Y(CitizenReport.geom)).where(CitizenReport.id == r.id))).first()
-        if row:
-            o.lon, o.lat = float(row[0]), float(row[1])
+        if lon is not None and lat is not None:
+            o.lon = float(lon)
+            o.lat = float(lat)
         outs.append(o)
     return outs
 

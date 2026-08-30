@@ -6,9 +6,12 @@ import { DISTRICT_VIEWS } from "./MapView";
 
 const LAYERS: { key: string; label: string; hint?: string }[] = [
   { key: "risk", label: "Hazard now (Model B)" },
+  { key: "rainfall", label: "Precipitation Radar (IMD/ERA5)" },
   { key: "terrain", label: "Terrain relief (3D hillshade)" },
   { key: "susceptibility", label: "Susceptibility (Model A)" },
-  { key: "roads", label: "Road status / detours" },
+  { key: "roads", label: "Road status (NH-29 / NH-102)" },
+  { key: "detours", label: "Emergency Detours & Blockages" },
+  { key: "shelters", label: "Relief Camps & Hospitals" },
   { key: "reports", label: "Citizen reports" },
   { key: "deformation", label: "Deformation (InSAR)", hint: "LiCSAR AOIs — ML phase" },
 ];

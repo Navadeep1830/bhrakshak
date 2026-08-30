@@ -14,7 +14,19 @@ from app.services.risk_engine import evaluate_all_zones
 
 router = APIRouter(prefix="/demo", tags=["demo"])
 
-FIXTURE_PATH = Path("/srv/demo/backtest_fixture.json")
+def _resolve_fixture_path() -> Path:
+    candidates = [
+        Path("/srv/demo/backtest_fixture.json"),
+        Path(__file__).resolve().parents[5] / "demo" / "backtest_fixture.json",
+        Path("demo/backtest_fixture.json"),
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
+
+
+FIXTURE_PATH = _resolve_fixture_path()
 
 
 @router.post("/inject-rainfall-storm")

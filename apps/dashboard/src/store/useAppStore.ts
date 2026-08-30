@@ -9,10 +9,14 @@ interface AppState {
   horizon: Horizon;
   layers: Record<string, boolean>;
   demoMode: boolean;
+  radarStep: number;
+  radarPlaying: boolean;
   selectZone: (id: string | null) => void;
   setHorizon: (h: Horizon) => void;
   toggleLayer: (name: string) => void;
   setDemoMode: (v: boolean) => void;
+  setRadarStep: (s: number) => void;
+  toggleRadarPlaying: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -23,14 +27,20 @@ export const useAppStore = create<AppState>((set) => ({
     terrain: true,
     susceptibility: false,
     roads: true,
+    detours: true,
+    shelters: true,
     reports: true,
     deformation: false,
-    rainfall: false,
+    rainfall: true,
   },
   demoMode: false,
+  radarStep: 6, // 6 corresponds to NOW
+  radarPlaying: false,
   selectZone: (id) => set({ selectedZoneId: id }),
   setHorizon: (horizon) => set({ horizon }),
   toggleLayer: (name) =>
     set((s) => ({ layers: { ...s.layers, [name]: !s.layers[name] } })),
   setDemoMode: (demoMode) => set({ demoMode }),
+  setRadarStep: (radarStep) => set({ radarStep }),
+  toggleRadarPlaying: () => set((s) => ({ radarPlaying: !s.radarPlaying })),
 }));

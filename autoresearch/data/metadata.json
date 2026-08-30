@@ -1,0 +1,67 @@
+{
+  "generated_at": "2026-08-29T18:21:30.697042+00:00",
+  "pilot_districts": [
+    "aizawl",
+    "east_khasi_hills",
+    "noney_imphal_west",
+    "gangtok"
+  ],
+  "susceptibility": {
+    "n_samples": 20000,
+    "n_features": 24,
+    "features": [
+      "slope_deg",
+      "aspect_sin",
+      "aspect_cos",
+      "elevation_m",
+      "plan_curv",
+      "profile_curv",
+      "twi",
+      "spi",
+      "tpi",
+      "dist_stream_km",
+      "dist_ridge_km",
+      "dist_roadcut_m",
+      "lithology_class",
+      "landcover_class",
+      "ndvi_mean",
+      "ndvi_trend_5yr",
+      "mean_annual_rain_mm",
+      "monsoon_rain_normal_mm",
+      "landslide_density_1km",
+      "soil_type",
+      "road_density_km_km2",
+      "settlement_density",
+      "fault_dist_km",
+      "ndvi_std"
+    ],
+    "positive_ratio": 0.25,
+    "cv_protocol": "Leave-One-District-Out (4 folds)"
+  },
+  "hazard_nowcast": {
+    "n_samples": 36000,
+    "n_features": 12,
+    "features": [
+      "rain_1h",
+      "rain_24h",
+      "rain_48h",
+      "rain_72h",
+      "rain_7d",
+      "eff_rain",
+      "soil_moisture",
+      "susc_mean",
+      "susc_p90",
+      "susc_high_frac",
+      "seismic_flag",
+      "verified_reports_7d"
+    ],
+    "splits": {
+      "train_years": "<=2019",
+      "val_years": "2020-2022",
+      "test_years": "2023-2024",
+      "n_train": 17924,
+      "n_val": 10805,
+      "n_test": 7271
+    }
+  }
+}

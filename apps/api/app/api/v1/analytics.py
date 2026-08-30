@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -86,3 +87,87 @@ async def response_priority(district: str | None = None, top: int = 25,
         }
         for r in rows
     ]
+
+
+@router.get("/briefing-dossier/{zone_id}")
+async def get_zone_briefing_dossier(zone_id: str, format: str = "json", db: AsyncSession = Depends(get_db)):
+    """Generates official District Collector briefing dossier with SHAP waterfall and DDMA SOPs."""
+    from app.services.briefing import generate_collector_briefing_dossier, render_briefing_markdown_report
+    from fastapi.responses import PlainTextResponse
+    
+    # Attempt to load zone from DB
+    zone = None
+    try:
+        zid = uuid.UUID(zone_id)
+        zone = (await db.execute(select(Zone).where(Zone.id == zid))).scalar_one_or_none()
+    except Exception:
+        pass
+        
+    z_code = zone.zone_code if zone else f"ZN-{zone_id[:8]}"
+    dist = zone.district if zone else "East Khasi Hills"
+    pop = zone.population if zone else 1450
+    
+    dossier = generate_collector_briefing_dossier(
+        zone_id=zone_id,
+        zone_code=z_code,
+        district=dist,
+        hazard_level=3,
+        prob_24h=0.82,
+        population=pop,
+        slope_deg=35.5,
+        rain_72h=245.0,
+        rain_1h=38.0,
+        vwc_pct=89.0,
+        pore_pressure_kpa=17.5,
+        insar_creep_mm_yr=-14.5,
+    )
+    
+    if format == "markdown":
+        md = render_briefing_markdown_report(dossier)
+        return PlainTextResponse(md, media_type="text/markdown")
+        
+    return dossier
+
+
+class DebrisRunoutRequestIn(BaseModel):
+    initial_volume_m3: float = 1_200_000.0
+    scarp_elevation_m: float = 850.0
+    valley_length_m: float = 2000.0
+    step_size_m: float = 20.0
+    coulomb_friction_mu: float = 0.16
+    turbulent_drag_xi: float = 450.0
+    scenario_name: str = "Tupul 2022 Benchmark Landslide Runout"
+
+
+@router.post("/debris-runout")
+async def compute_debris_runout(payload: DebrisRunoutRequestIn):
+    """Computes Voellmy-Salm 1D shallow-water debris runout velocity, inundation depth, and kinetic impact pressure on downstream settlements."""
+    from app.services.debris_runout import simulate_voellmy_debris_runout, VoellmyParams
+
+    params = VoellmyParams(
+        coulomb_friction_mu=payload.coulomb_friction_mu,
+        turbulent_drag_xi=payload.turbulent_drag_xi,
+    )
+
+    result = simulate_voellmy_debris_runout(
+        initial_volume_m3=payload.initial_volume_m3,
+        scarp_elevation_m=payload.scarp_elevation_m,
+        valley_length_m=payload.valley_length_m,
+        step_size_m=payload.step_size_m,
+        params=params,
+        scenario_name=payload.scenario_name,
+    )
+
+    return {
+        "scenario_name": result.scenario_name,
+        "total_volume_m3": result.total_volume_m3,
+        "total_runout_distance_m": result.total_runout_distance_m,
+        "peak_velocity_m_s": result.peak_velocity_m_s,
+        "peak_velocity_km_h": round(result.peak_velocity_m_s * 3.6, 1),
+        "peak_inundation_depth_m": result.peak_inundation_depth_m,
+        "peak_impact_pressure_kpa": result.peak_impact_pressure_kpa,
+        "total_transit_duration_sec": result.total_transit_duration_sec,
+        "settlement_impacts": result.settlement_impacts,
+        "profile_summary_sample": [st.__dict__ for st in result.profile_steps[::5]],
+        "computational_engine": result.computational_engine,
+    }

@@ -42,11 +42,11 @@ def _probe_db() -> bool:
 
 DB_OK = _probe_db()
 
-pytestmark = pytest.mark.skipif(not DB_OK, reason="postgres test db unreachable (run make up)")
-
 
 @pytest_asyncio.fixture(scope="session")
 async def engine():
+    if not DB_OK:
+        pytest.skip("postgres test db unreachable (run make up)")
     eng = create_async_engine(TEST_DB_URL)
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

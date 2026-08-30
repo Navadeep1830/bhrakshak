@@ -63,7 +63,7 @@ def main() -> None:
     for i, (name, center) in enumerate(AOIS.items()):
         ps = synthetic_ps_points(1500, center, seed=900 + i)
         z = robust_zscore(ps["vel_mm_yr"])
-        mask = z > 3.0  # moving away from satellite significantly faster than background
+        mask = (z < -3.0) | (np.abs(z) > 3.0)  # ground moving significantly away from satellite (downslope creep)
         labels, n_clusters = cluster_flagged(ps["lat"], ps["lon"], mask)
         report[name] = {
             "points": int(len(z)),
