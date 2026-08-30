@@ -73,6 +73,50 @@ def fuse_level(rain_1h: float, rain_24h: float, susc_mean: float | None, prob_24
     return max(threshold_tier(rain_1h, rain_24h, susc_mean), ml_tier(prob_24h))
 
 
+# --- forecast horizons -------------------------------------------------------
+# The +24/+48/+72 h snapshots used to copy the "now" level verbatim (via a
+# degenerate `+ (0 if horizon != "f72" else 0)` expression), so every forecast
+# column on the dashboard was a flat mirror of the current state. They are now
+# produced by an explicit, auditable projection.
+#
+# Baseline: blend the observed 24 h accumulation with a persistence projection
+# of the current hourly rate. The persistence weight decays with lead time
+# because rainfall forecast skill does. The retained observed term stands in for
+# saturated antecedent conditions -- a slope that took 200 mm yesterday is still
+# primed today even if the rain has stopped. It is deliberately simple: the
+# WeatherIngestor forecast path supersedes it the moment real forecast
+# accumulations are available for a zone, and Model B supersedes both.
+PERSISTENCE_WEIGHT = {"f24": 0.60, "f48": 0.35, "f72": 0.20}
+
+
+def project_rainfall(rain_1h: float, rain_24h: float, horizon: str) -> tuple[float, float]:
+    """Project (rain_1h, rain_24h) forward to `horizon`.
+
+    Returns (rain_1h_fc, rain_24h_fc) in mm. See PERSISTENCE_WEIGHT.
+    """
+    k = PERSISTENCE_WEIGHT.get(horizon, 0.0)
+    rate = rain_1h if rain_1h > 0 else rain_24h / 24.0
+    r1h_fc = rain_1h * (1.0 - k) + rate * k
+    r24_fc = rain_24h * (1.0 - k) + (rate * 24.0) * k
+    return r1h_fc, r24_fc
+
+
+def forecast_level(
+    rain_1h: float,
+    rain_24h: float,
+    susc_mean: float | None,
+    prob_24h: float | None,
+    horizon: str,
+) -> int:
+    """Warning level projected at a future horizon (f24 / f48 / f72)."""
+    r1h, r24 = project_rainfall(rain_1h, rain_24h, horizon)
+    tier = threshold_tier(r1h, r24, susc_mean)
+    if horizon == "f24":
+        # only the 24 h horizon is inside Model B's prediction window
+        tier = max(tier, ml_tier(prob_24h))
+    return max(0, min(4, tier))
+
+
 def apply_hysteresis(current: int, candidate: int, above_streak: int, below_streak: int) -> tuple[int, int, int]:
     """Returns (new_level, new_above_streak, new_below_streak).
 
@@ -168,6 +212,14 @@ async def evaluate_zone(db: AsyncSession, zone: Zone, cell: RiskCell | None) -> 
 
     candidate = fuse_level(rain_1h, rain_24h, zone.susc_mean, None)
 
+    # Project the +24/48/72 h levels from this same observation so the forecast
+    # snapshots are a projection rather than a copy of "now". Attached to the
+    # cell as a transient (non-persisted) attribute for snapshot_zone().
+    fc_levels = {
+        h: forecast_level(rain_1h, rain_24h, zone.susc_mean, cell.prob_24h if cell else None, h)
+        for h in ("f24", "f48", "f72")
+    }
+
     if cell is None:
         cell = RiskCell(
             zone_id=zone.id,
@@ -186,6 +238,7 @@ async def evaluate_zone(db: AsyncSession, zone: Zone, cell: RiskCell | None) -> 
         db.add(cell)
         await db.flush()
         await _sync_geom(db, cell, zone)
+        cell._forecast_levels = fc_levels
         return cell
 
     prev = cell.hazard_level
@@ -229,6 +282,7 @@ async def evaluate_zone(db: AsyncSession, zone: Zone, cell: RiskCell | None) -> 
         )
 
     await _sync_geom(db, cell, zone)
+    cell._forecast_levels = fc_levels
     return cell
 
 
@@ -256,7 +310,14 @@ async def snapshot_zone(db: AsyncSession, zone: Zone, cell: RiskCell) -> None:
             )
         )
         snap = exists.scalar_one_or_none()
-        level = cell.hazard_level if horizon == "now" else min(4, cell.hazard_level + (0 if horizon != "f72" else 0))
+        if horizon == "now":
+            level = cell.hazard_level
+        else:
+            # Real projection from evaluate_zone(). Previously this read
+            # `cell.hazard_level + (0 if horizon != "f72" else 0)`, which always
+            # added zero, so f24/f48/f72 were indistinguishable from "now".
+            fc = getattr(cell, "_forecast_levels", None) or {}
+            level = int(fc.get(horizon, cell.hazard_level))
         if snap is None:
             db.add(
                 RiskSnapshot(

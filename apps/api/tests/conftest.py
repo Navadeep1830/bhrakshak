@@ -27,7 +27,20 @@ async def _db_available() -> bool:
         return False
 
 
-DB_OK = asyncio.get_event_loop().run_until_complete(_db_available()) if True else False
+def _probe_db() -> bool:
+    """Run the async reachability probe from module (synchronous) scope.
+
+    Previously this used ``asyncio.get_event_loop().run_until_complete(...)``,
+    which is deprecated from Python 3.12 and removed in 3.14 -- on a modern
+    interpreter collection of the whole test suite died at import time.
+    """
+    try:
+        return asyncio.run(_db_available())
+    except Exception:
+        return False
+
+
+DB_OK = _probe_db()
 
 pytestmark = pytest.mark.skipif(not DB_OK, reason="postgres test db unreachable (run make up)")
 
