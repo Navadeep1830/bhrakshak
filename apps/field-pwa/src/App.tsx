@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { EdgeVisionInspector, type FissureAnalysisResult } from "./components/EdgeVisionInspector";
 import { VoiceRecorder } from "./components/VoiceRecorder";
-import { db, queueReport, syncQueue } from "./db";
+import { db, getStoredToken, loginAndStore, queueReport, syncQueue } from "./db";
 import { LANGS, makeT, type LangCode } from "./i18n";
 
 const API = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
@@ -54,6 +54,8 @@ export default function App() {
           📴 {t("offline_banner")}
         </div>
       )}
+
+      <LoginBar apiUrl={API} />
 
       {/* Emergency Multi-Lingual Broadcast Banner */}
       <EmergencyBroadcastBanner t={t} lang={lang} />
@@ -286,6 +288,28 @@ function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
         {t("save")}
       </button>
       {saved && <p className="mt-2 text-center text-sm text-emerald-400">✓ Saved to offline queue — will sync</p>}
+    </section>
+  );
+}
+
+function LoginBar({ apiUrl }: { apiUrl: string }) {
+  const [email, setEmail] = useState(() => localStorage.getItem("bh_token_email") || "field.noney@bhrakshak.in");
+  const [pw, setPw] = useState("Field@123");
+  const [msg, setMsg] = useState<string | null>(null);
+  const logged = !!getStoredToken();
+  return (
+    <section className="mb-3 rounded-xl border border-[#1E293B] bg-[#111A2C] px-3 py-2.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-bold text-slate-300">{logged ? `✓ ${localStorage.getItem("bh_token_email")}` : "Field login (offline-safe, stored token)"}</span>
+        {logged && <button onClick={() => { localStorage.removeItem("bh_token"); localStorage.removeItem("bh_token_email"); setMsg("Logged out"); setTimeout(()=>setMsg(null),1500); }} className="text-rose-400">Logout</button>}
+      </div>
+      <div className="mt-2 flex gap-1.5">
+        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="email" className="min-w-0 flex-1 rounded bg-[#0B1220] px-2 py-1.5 text-xs" />
+        <input value={pw} onChange={e=>setPw(e.target.value)} type="password" placeholder="password" className="w-24 rounded bg-[#0B1220] px-2 py-1.5 text-xs" />
+        <button onClick={async()=>{ const ok=await loginAndStore(apiUrl,email,pw); setMsg(ok?"✓ Logged in":"Login failed"); setTimeout(()=>setMsg(null),2000); }} className="rounded bg-orange-600 px-3 py-1.5 text-xs font-bold">Login</button>
+      </div>
+      {msg && <div className="mt-1 text-xs text-emerald-400">{msg}</div>}
+      <div className="mt-1 text-[11px] text-slate-500">Demo: field.noney@bhrakshak.in / Field@123 · dc.ekh@bhrakshak.in / District@123 · citizen@bhrakshak.in / Citizen@123</div>
     </section>
   );
 }

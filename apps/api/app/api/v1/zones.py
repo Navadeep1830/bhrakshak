@@ -114,6 +114,7 @@ async def zone_dossier(zone_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     ).scalars().all()
 
     iso_val = isolation_score(zone.population, zone.road_km, zone.zone_code)
+    latest_rain = rain[-1] if rain else None
     out_extra = {
         "flood_level": flood_index(
             getattr(latest_rain, "rain_1h", None),

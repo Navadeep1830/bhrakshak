@@ -29,6 +29,18 @@ class Settings(BaseSettings):
 
     open_meteo_base: str = "https://api.open-meteo.com/v1"
 
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+
+    # alert channels — dryrun by default so demo never needs real keys
+    sms_provider: str = "dryrun"
+    alert_sms_dryrun: str = "true"
+    fcm_dryrun: str = "true"
+    siren_webhook_url: str | None = None
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
     @property
     def sync_database_url(self) -> str:
         return self.database_url.replace("+asyncpg", "+psycopg")

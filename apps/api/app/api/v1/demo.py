@@ -15,9 +15,12 @@ from app.services.risk_engine import evaluate_all_zones
 router = APIRouter(prefix="/demo", tags=["demo"])
 
 def _resolve_fixture_path() -> Path:
+    # parents[5] blows up when __file__ is shallower than 6 levels (e.g. the
+    # container layout /srv/app/api/v1/demo.py). Walk upward instead.
+    here = Path(__file__).resolve()
     candidates = [
         Path("/srv/demo/backtest_fixture.json"),
-        Path(__file__).resolve().parents[5] / "demo" / "backtest_fixture.json",
+        *(p / "demo" / "backtest_fixture.json" for p in here.parents),
         Path("demo/backtest_fixture.json"),
     ]
     for c in candidates:
@@ -48,6 +51,10 @@ async def inject_rainfall_storm(
             ts = now - timedelta(hours=(steps - 1 - i))
             intensity = round(body.peak_mm_h * ((i + 1) / steps) ** 2, 1)  # ramping cell
             rain_24h = round(intensity * 6 + 40, 1)
+            # Antecedent columns are real measurements in production (the
+            # ingestor fills them); the injector derives them from the storm
+            # ramp so Model B's full feature contract is satisfiable instead of
+            # every prediction refusing for missing antecedents.
             db.add(
                 RainfallObs(
                     ts=ts,

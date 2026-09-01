@@ -661,12 +661,25 @@ def main() -> None:
         return
 
     results = run_all(args.aoi, years=args.years, write_db=args.write_db)
-    print(f"\n{'AOI':8} {'rows':>7} {'annual_mm':>10} {'max_eff':>8} {'soil%':>6}  synthetic")
+    # ``soil%`` is COVERAGE, not the mean of the column. Open-Meteo's archive
+    # endpoint accepts the soil-moisture variable and returns nulls for every
+    # historical hour, so the mean is computed over the ~72 forecast rows and
+    # printing it under a bare "soil%" header reads as 33% coverage when the
+    # real figure is 0.04%. That misled a debugging session into thinking the
+    # antecedent-moisture feature had been recovered. It has not; eff_rain is
+    # still the proxy, which is why the models carry it.
+    print(f"\n{'AOI':8} {'rows':>7} {'annual_mm':>10} {'max_eff':>8} "
+          f"{'soil_cov%':>10}  synthetic")
     for r in results:
         print(f"{r['aoi']:8} {r['rows']:>7} {str(r.get('annual_rain_mm')):>10} "
-              f"{str(r.get('max_eff_rain_mm')):>8} {str(r.get('mean_soil_moisture_pct')):>6}  "
+              f"{str(r.get('max_eff_rain_mm')):>8} "
+              f"{str(r.get('soil_moisture_coverage_pct')):>10}  "
               f"{'YES' if r.get('synthetic') else 'no'}")
     print(f"\nartifacts -> {ARTIFACTS / 'weather_summary.json'}")
+    if any(float(r.get("soil_moisture_coverage_pct") or 0) < 1.0 for r in results):
+        print("note: soil moisture is unavailable historically (archive endpoint "
+              "returns nulls); antecedent condition is carried by eff_rain, the "
+              "Kohler-Linsley index, which is defined over the full history.")
 
 
 if __name__ == "__main__":

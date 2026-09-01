@@ -44,6 +44,32 @@ export function queueReport(r: Omit<QueuedReport, "client_id" | "created_at" | "
   });
 }
 
+const TOKEN_KEY = "bh_token";
+const TOKEN_EMAIL_KEY = "bh_token_email";
+
+export function getStoredToken(): string | null {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
+
+export async function loginAndStore(apiUrl: string, email: string, password: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${apiUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) return false;
+    const j = await res.json();
+    if (j.access_token) {
+      localStorage.setItem(TOKEN_KEY, j.access_token);
+      localStorage.setItem(TOKEN_EMAIL_KEY, email);
+      if (j.refresh_token) localStorage.setItem("bh_refresh", j.refresh_token);
+      return true;
+    }
+    return false;
+  } catch { return false; }
+}
+
 export async function syncQueue(apiUrl: string): Promise<{ sent: number }> {
   const pending = await db.reports.where("status").equals("pending").toArray();
   if (!pending.length) return { sent: 0 };
@@ -64,12 +90,30 @@ export async function syncQueue(apiUrl: string): Promise<{ sent: number }> {
     })),
   };
   try {
+    let token = getStoredToken();
+    // try stored token first, then fall back to demo citizen login
+    let res: Response | null = null;
+    if (token) {
+      res = await fetch(`${apiUrl}/api/v1/reports/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 401) { localStorage.removeItem(TOKEN_KEY); token = null; }
+      else if (res.ok) {
+        await db.reports.bulkPut(pending.map((r) => ({ ...r, status: "synced" as const })));
+        return { sent: pending.length };
+      }
+    }
+    // demo fallback — citizen@bhrakshak.in (field officials should login via UI)
     const login = await fetch(`${apiUrl}/api/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "citizen@bhrakshak.in", password: "Citizen@123" }),
     }).then((r) => r.json());
-    const res = await fetch(`${apiUrl}/api/v1/reports/sync`, {
+    if (!login.access_token) throw new Error("login failed");
+    localStorage.setItem(TOKEN_KEY, login.access_token);
+    res = await fetch(`${apiUrl}/api/v1/reports/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${login.access_token}` },
       body: JSON.stringify(payload),

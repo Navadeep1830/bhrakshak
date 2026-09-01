@@ -20,7 +20,16 @@ from geoalchemy2 import WKTElement
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Alert, I18nMessage, RainfallObs, RiskCell, RiskSnapshot, Zone
+from app.models import (
+    Alert,
+    CitizenReport,
+    I18nMessage,
+    RainfallObs,
+    RiskCell,
+    RiskSnapshot,
+    SeismicEvent,
+    Zone,
+)
 
 log = logging.getLogger("bhrakshak.risk")
 
@@ -182,6 +191,8 @@ def predict_model_b(
     *,
     antecedent: Any = None,
     insar_velocity_mm_yr: float | None = None,
+    seismic_flag: bool = False,
+    verified_reports_7d: int = 0,
 ) -> tuple[float, list[dict]]:
     """Return calibrated P(landslide in 24h) plus the driver breakdown.
 
@@ -220,6 +231,10 @@ def predict_model_b(
         "susc_mean": susc_mean_val,
         "susc_p90": susc_p90_val,
         "susc_high_frac": max(0.0, min(1.0, (susc_p90_val - 50.0) / 45.0)),
+        # bundle-contract features beyond the rain row: M>=4 quake near the zone
+        # in the last 7d, and field-verified citizen reports in the last 7d.
+        "seismic_flag": 1 if seismic_flag else 0,
+        "verified_reports_7d": float(verified_reports_7d or 0),
     }
     if rain_1h is not None and rain_24h is not None:
         known["id_interaction"] = rain_1h * np.sqrt(max(rain_24h, 0.0))
@@ -231,10 +246,64 @@ def predict_model_b(
         known["soil_norm"] = soil_norm
         known["sat_trigger"] = (eff_rain / 40.0) * (soil_norm ** 1.5) * (susc_p90_val / 100.0)
 
+    # --- engineered features of the autoresearch champion bundle -----------
+    # train.py _HAZARD_SPECS: 12 raw + 4 engineered = 16 columns the scaler
+    # expects. Missing any one made inference fail with "expecting 16
+    # features" and every prediction silently degraded to the physical prior.
+    if rain_1h is not None and rain_24h is not None:
+        known["id_power_law"] = rain_1h * (max(rain_24h, 0.0) ** 0.45)
+    if all(v is not None for v in (rain_1h, rain_24h, rain_7d, eff_rain)):
+        known["flash_ratio"] = rain_1h / (rain_24h + 0.5)
+        known["deep_storage"] = (rain_7d + eff_rain * 1.5) / 120.0
+
+    # --- real-data (v1-real-openmeteo) bundle feature space ----------------
+    # That bundle's features are DISTRICT-RELATIVE ANOMALIES: accumulation /
+    # (district p90 fitted on the training period, persisted in the bundle as
+    # bundle["anomaly_refs"][district][column]). Without the anomaly transform
+    # the raw millimetres land in the model's feature space unnormalised and
+    # every probability saturates. Grid-max twins need the grid pull; when the
+    # zone has no grid observation the twin is derived from the mean as a
+    # conservative 1.15x and flagged via the driver list.
+    bundle = get_model_b_bundle()
+    refs = (bundle or {}).get("anomaly_refs") or {}
+    district_refs = refs.get(zone.district) or {}
+    if district_refs:
+        def _anom(col: str, val: float | None) -> float | None:
+            if val is None:
+                return None
+            base = district_refs.get(col)
+            if not base:
+                return None
+            return float(val) / float(base)
+
+        known["rain_24h_anom"] = _anom("rain_24h", rain_24h)
+        known["rain_72h_anom"] = _anom("rain_72h", rain_72h)
+        known["eff_rain_anom"] = _anom("eff_rain", eff_rain)
+        # rain_max_1h: observed hourly peak; a single-hour obs is the best
+        # available proxy when no hourly series is attached.
+        known["rain_max_1h_anom"] = _anom(
+            "rain_max_1h", max(rain_1h, (rain_24h or 0.0) / 24.0 * 3.0)
+        )
+        # grid-max twins: 1.15x the district mean (extremes exceed the mean but
+        # the grid pull is not available at API time)
+        known["eff_rain_gridmax_anom"] = (
+            (known["eff_rain_anom"] * 1.15) if known["eff_rain_anom"] is not None else None
+        )
+        known["rain_24h_gridmax_anom"] = (
+            (known["rain_24h_anom"] * 1.15) if known["rain_24h_anom"] is not None else None
+        )
+
     measured = {k: v for k, v in known.items() if v is not None}
 
     # --- run the bundle only if every feature it needs is measured -------
+    # `raw_score` is the model output in its own units (logistic decision
+    # function / rule column, here the district-relative anomaly score). It is
+    # returned alongside the calibrated probability because isotonic
+    # calibration on a 0.3% base rate saturates at a plateau — the probability
+    # cannot separate L2 from L4, but the raw score honours each alert budget
+    # separately via bundle["raw_score_thresholds"].
     prob = None
+    raw_score = None
     if bundle is not None:
         feats = [str(f) for f in bundle["features"]]
         gaps = [f for f in feats if f not in measured]
@@ -248,17 +317,24 @@ def predict_model_b(
                 scaler = bundle["scaler"]
                 lgbm = bundle["lgbm"]
                 xgb = bundle["xgb"]
-                w_lgbm, w_xgb = bundle.get("weights", (0.58, 0.42))
+                w_lgbm, w_xgb = bundle.get("weights", (1.0, 0.0))
                 calibrator = bundle["calibrator"]
 
                 feat_vec = np.array([[measured[f] for f in feats]], dtype=np.float32)
-                X_scaled = scaler.transform(feat_vec)
-                raw_prob = (
-                    w_lgbm * lgbm.predict_proba(X_scaled)[:, 1]
-                    + w_xgb * xgb.predict_proba(X_scaled)[:, 1]
-                )
-                cal_prob = float(calibrator.predict(raw_prob)[0])
-                prob = max(0.0, min(1.0, cal_prob))
+                if scaler is not None:
+                    feat_vec = scaler.transform(feat_vec)
+                preds = []
+                if lgbm is not None:
+                    preds.append(lgbm.predict_proba(feat_vec)[:, 1])
+                if xgb is not None:
+                    preds.append(xgb.predict_proba(feat_vec)[:, 1])
+                if preds:
+                    blend = preds[0] if len(preds) == 1 else (
+                        w_lgbm * preds[0] + w_xgb * preds[1]
+                    )
+                    raw_score = float(blend[0])
+                    cal_prob = float(np.asarray(calibrator.predict(blend))[0])
+                    prob = max(0.0, min(1.0, cal_prob))
             except Exception as exc:
                 log.warning("Model B inference error (%s) - falling back to physical calibration", exc)
                 prob = None
@@ -333,7 +409,29 @@ def predict_model_b(
         d["contribution"] = round(d.pop("_weight") / total, 3)
 
     drivers.sort(key=lambda x: -(x["contribution"] or 0.0))
-    return round(prob, 4), drivers
+    return round(prob, 4), drivers, raw_score
+
+
+def tier_from_raw(raw_score: float | None) -> int:
+    """Cut the model's raw score on the alert-budget thresholds.
+
+    The bundle's raw_score_thresholds are the frozen budget cuts in the
+    model's own units (L1 = wettest 20% of training days ... L4 = top 1%).
+    Isotonic calibration saturates at a plateau, so the calibrated probability
+    cannot separate L3 from L4; the raw score can.
+    """
+    if raw_score is None:
+        return 0
+    bundle = get_model_b_bundle()
+    thr = (bundle or {}).get("raw_score_thresholds") or {}
+    if thr:
+        tier = 0
+        for lvl in (1, 2, 3, 4):
+            t = thr.get(str(lvl), thr.get(lvl))
+            if t is not None and raw_score >= float(t):
+                tier = max(tier, lvl)
+        return tier
+    return 0
 
 
 def generate_dc_directive(
@@ -479,7 +577,15 @@ def generate_dc_directive(
 
 
 def ml_tier(prob_24h: float | None) -> int:
-    """Isotonic-calibrated Model B probability tiers (Optimal Pareto Thresholds)."""
+    """Tier from a PROBABILITY on the physical-prior scale (legacy cuts).
+
+    This function now only ever sees the closed-form physical prior: when the
+    real bundle runs, the tier comes from tier_from_raw() on the raw score
+    instead. The bundle's budget cuts (L4 at calibrated p >= 0.016) must never
+    be applied here — the physical prior emits 0.02-0.05 for dry high-
+    susceptibility zones, and cutting that against a 0.3%-base-rate model's
+    scale made every high-susc zone L4 in clear weather.
+    """
     if prob_24h is None:
         return 0
     if prob_24h >= 0.75:
@@ -493,8 +599,23 @@ def ml_tier(prob_24h: float | None) -> int:
     return 0
 
 
-def fuse_level(rain_1h: float, rain_24h: float, susc_mean: float | None, prob_24h: float | None) -> int:
-    return max(threshold_tier(rain_1h, rain_24h, susc_mean), ml_tier(prob_24h))
+def fuse_level(
+    rain_1h: float,
+    rain_24h: float,
+    susc_mean: float | None,
+    prob_24h: float | None,
+    raw_score: float | None = None,
+) -> int:
+    """Fused level = max(I-D threshold tier, Model B tier).
+
+    The ML tier comes from the raw score's budget cut when the bundle provides
+    one (continuous, discriminative); the calibrated probability cut is the
+    fallback for bundles without raw thresholds.
+    """
+    ml = tier_from_raw(raw_score) if raw_score is not None else ml_tier(prob_24h)
+    if ml == 0 and raw_score is not None:
+        ml = ml_tier(prob_24h)
+    return max(threshold_tier(rain_1h, rain_24h, susc_mean), ml)
 
 
 # --- forecast horizons -------------------------------------------------------
@@ -568,7 +689,7 @@ def top_drivers(
     zone: Zone,
     antecedent: Any = None,
 ) -> list[dict]:
-    _, drivers = predict_model_b(rain_1h, rain_24h, soil_moisture, zone, antecedent=antecedent)
+    _, drivers, _ = predict_model_b(rain_1h, rain_24h, soil_moisture, zone, antecedent=antecedent)
     return drivers
 
 
@@ -672,12 +793,55 @@ async def evaluate_zone(db: AsyncSession, zone: Zone, cell: RiskCell | None) -> 
     rain_24h = float(obs.rain_24h) if obs and obs.rain_24h is not None else 0.0
     soil = obs.soil_moisture if obs else None
 
+    # Bundle-contract context features, queried not invented: M>=4 seismic
+    # trigger within ~1 deg of the zone in the last 7d, and field-verified
+    # citizen reports in the last 7d near the zone centroid.
+    since7 = now - timedelta(days=7)
+    try:
+        clat, clon = (
+            await db.execute(
+                select(func.ST_Y(func.ST_Centroid(Zone.geom)), func.ST_X(func.ST_Centroid(Zone.geom))).where(Zone.id == zone.id)
+            )
+        ).one()
+        seismic_flag = bool(
+            (
+                await db.execute(
+                    select(func.count()).select_from(SeismicEvent).where(
+                        SeismicEvent.trigger_flag.is_(True),
+                        SeismicEvent.occurred_at >= since7,
+                        func.abs(SeismicEvent.lat - float(clat or 0)) < 1.0,
+                        func.abs(SeismicEvent.lon - float(clon or 0)) < 1.0,
+                    )
+                )
+            ).scalar_one()
+        )
+        verified_7d = int(
+            (
+                await db.execute(
+                    select(func.count())
+                    .select_from(CitizenReport)
+                    .join(Zone, Zone.id == zone.id)
+                    .where(
+                        CitizenReport.status == "verified",
+                        CitizenReport.created_at >= since7,
+                        func.ST_DWithin(CitizenReport.geom, func.ST_Centroid(Zone.geom), 0.05),
+                    )
+                )
+            ).scalar_one()
+        )
+    except Exception as e:
+        log.debug("context features unavailable for %s: %s", zone.zone_code, e)
+        seismic_flag, verified_7d = False, 0
+
     # `obs` is handed to the model whole: it carries rain_48h / rain_72h /
     # rain_7d / eff_rain, which are measured columns on rainfall_obs. Reading
     # only rain_1h and rain_24h here is what forced predict_model_b to invent
     # the rest from rain_24h.
-    prob_24h, drivers = predict_model_b(rain_1h, rain_24h, soil, zone, antecedent=obs)
-    candidate = fuse_level(rain_1h, rain_24h, zone.susc_mean, prob_24h)
+    prob_24h, drivers, raw_score = predict_model_b(
+        rain_1h, rain_24h, soil, zone,
+        antecedent=obs, seismic_flag=seismic_flag, verified_reports_7d=verified_7d,
+    )
+    candidate = fuse_level(rain_1h, rain_24h, zone.susc_mean, prob_24h, raw_score)
     model_version = active_model_version()
 
     # Project the +24/48/72 h levels from this same observation so the forecast
@@ -731,6 +895,21 @@ async def evaluate_zone(db: AsyncSession, zone: Zone, cell: RiskCell | None) -> 
                 recipients=max(1, (zone.population or 0) // 50),
             )
             db.add(alert)
+            await db.flush()
+            # Real delivery fan-out — never raises, logs dryrun when no keys
+            try:
+                from app.services.channels.dispatcher import dispatch_alert
+
+                await dispatch_alert(
+                    zone_code=zone.zone_code,
+                    district=zone.district or "NER",
+                    level=new_level,
+                    message=msg,
+                    recipients=alert.recipients,
+                    channels=alert.channels,
+                )
+            except Exception as e:
+                log.warning("dispatch_alert failed for %s: %s", zone.zone_code, e)
             await publish_live(
                 "alert",
                 {

@@ -61,16 +61,39 @@ async def _poll_all() -> int:
             )
         ).all()
 
-        for z, lat, lon in zone_rows:
-            lat_f = float(lat) if lat is not None else None
-            lon_f = float(lon) if lon is not None else None
-            data = await _fetch_open_meteo(lat_f, lon_f) if lat_f and lon_f else None
-            
+        # Parallel fetch, bounded: 536 zones serially at up to 15 s timeout
+        # each can take 20+ minutes and the beat schedule moves on. A
+        # semaphore of 8 stays far under Open-Meteo's free-tier rate limit
+        # (~600 req/min) while finishing the whole fleet in ~1-2 minutes.
+        sem = asyncio.Semaphore(8)
+
+        async def _fetch_for(z, lat_f, lon_f):
+            async with sem:
+                if lat_f is None or lon_f is None:
+                    return z, None
+                return z, await _fetch_open_meteo(lat_f, lon_f)
+
+        results = await asyncio.gather(
+            *(_fetch_for(z, float(lat) if lat is not None else None, float(lon) if lon is not None else None) for z, lat, lon in zone_rows),
+            return_exceptions=True,
+        )
+
+        for item in results:
+            if isinstance(item, Exception):
+                log.warning("zone fetch task failed: %s", item)
+                continue
+            z, data = item
+
             hourly: list[float]
             soil: list[float] | None = None
             if data and "hourly" in data:
                 hourly = data["hourly"].get("precipitation") or []
                 soil = data["hourly"].get("soil_moisture_3_to_9cm")
+                # Open-Meteo emits null for the current partial hour; a None in
+                # the tail would crash the rolling sums with TypeError.
+                hourly = [float(m) if m is not None else 0.0 for m in hourly]
+                if soil:
+                    soil = [float(s) if s is not None else None for s in soil]
             else:
                 hourly = _synthetic_hourly()
             if not hourly:

@@ -94,12 +94,32 @@ USERS = [
 ]
 
 I18N_SEED = [
+    # seeded to DB; risk_engine DEFAULT_TEMPLATES carries the other 3 langs as fallback until native-speaker review
+    ("alert.l1", "en", "Watch: landslide risk rising near {village} ({level}). Avoid steep slopes. - BhuRakshak"),
+    ("alert.l1", "hi", "सतर्कता: {village} के पास भूस्खलन का ख़तरा बढ़ रहा है ({level})। ढलानों से दूर रहें। - भूरक्षक"),
+    ("alert.l1", "bn", "নজরদারি: {village} এর কাছে ভূমিধসের ঝুঁকি বাড়ছে ({level})। খাড়া ঢাল এড়িয়ে চলুন। - ভুরক্ষক"),
+    ("alert.l1", "as", "নজৰদাৰী: {village}ৰ ওচৰত ভূমিস্খলনৰ সম্ভাৱনা বাঢ়িছে ({level})। থিয় ঢাল পৰিহাৰ কৰক। - ভূৰক্ষক"),
+    ("alert.l1", "ne", "सतर्कता: {village} नजिक भूपतनको जोखिम बढ्दैछ ({level})। भिरालो ठाउँबाट टाढा रहनुहोस्। - भूरक्षक"),
     ("alert.l2", "en", "ALERT: landslide risk {level} near {village}. Move away from slope edges. - BhuRakshak"),
     ("alert.l2", "hi", "चेतावनी: {village} के पास भूस्खलन जोखिम ({level})। ढलान किनारों से हटें। - भूरक्षक"),
+    ("alert.l2", "bn", "সতর্কতা: {village} এর কাছে ভূমিধসের ঝুঁকি ({level})। ঢাল থেকে দূরে থাকুন। - ভুরক্ষক"),
+    ("alert.l2", "as", "সতৰ্কতা: {village}ৰ ওচৰত ভূমিস্খলনৰ আশংকা ({level})। ঢালু স্থানৰ পৰা আঁতৰি থাকক। - ভূৰক্ষক"),
+    ("alert.l2", "ne", "चेतावनी: {village} नजिक भूपतनको जोखिम ({level})। ढल्कानबाट टाढा बस्नुहोस्। - भूरक्षक"),
     ("alert.l3", "en", "WARNING: high landslide risk ({level}) near {village}. Follow evacuation advice. - District Admin"),
     ("alert.l3", "hi", "चेतावनी: {village} में भूस्खलन का उच्च ख़तरा ({level})। सलाह का पालन करें। - जिला प्रशासन"),
+    ("alert.l3", "bn", "বিপদবার্তা: {village} এ ভূমিধসের উচ্চ ঝুঁকি ({level})। উচ্ছেদ নির্দেশ মেনে চলুন। - জেলা প্রশাসন"),
+    ("alert.l3", "as", "সতৰ্কবাণী: {village}ৰ ওচৰত ভূমিস্খলনৰ বৃহৎ বিপদ ({level})। প্ৰশাসনৰ পৰামৰ্শ মানি চলক। - জিলা প্ৰশাসন"),
+    ("alert.l3", "ne", "गम्भीर चेतावनी: {village} मा उच्च भूपतन जोखिम ({level})। उद्धार सल्लाह पालना गर्नुहोस्। - जिल्ला प्रशासन"),
+    ("alert.l4", "en", "EMERGENCY ({level}): {village}. Evacuate now via marked routes. - District Admin"),
+    ("alert.l4", "hi", "आपातकाल ({level}): {village}। चिह्नित मार्गों से तुरंत निकलें। - जिला प्रशासन"),
+    ("alert.l4", "bn", "জরুরি অবস্থা ({level}): {village}। চিহ্নিত রুট দিয়ে এখনই সরে যান। - জেলা প্রশাসন"),
+    ("alert.l4", "as", "জৰুৰীকালীন ({level}): {village}। নিৰ্দিষ্ট সুৰক্ষিত পথেৰে তৎকালীনভাৱে স্থান ত্যাগ কৰক। - জিলা প্ৰশাসন"),
+    ("alert.l4", "ne", "आपतकालिन ({level}): {village}। तोकिएको मार्गबाट तुरुन्त सुरक्षित स्थानमा जानुहोस्। - जिल्ला प्रशासन"),
     ("alert.allclear", "en", "All clear: landslide risk reduced near {village}. - BhuRakshak"),
     ("alert.allclear", "hi", "सुरक्षित: {village} के पास भूस्खलन ख़तरा कम हुआ। - भूरक्षक"),
+    ("alert.allclear", "bn", "বিপদমুক্ত: {village} এর কাছে ভূমিধসের ঝুঁকি কমেছে। - ভুরক্ষক"),
+    ("alert.allclear", "as", "বিপদমুক্ত: {village}ৰ ওচৰত ভূমিস্খলনৰ শংকা হ্ৰাস পাইছে। - ভূৰক্ষক"),
+    ("alert.allclear", "ne", "सुरक्षित: {village} नजिक भूपतनको जोखिम घटेको छ। - भूरक्षक"),
 ]
 
 # Synthetic arterial roads per district (marked synthetic; replaced by OSM in ML phase)

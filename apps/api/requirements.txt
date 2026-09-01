@@ -23,6 +23,11 @@ pytest-asyncio>=0.23
 # time and the API never binds a port. They were missing entirely.
 numpy>=1.26,<3.0
 joblib>=1.3
+# The exported model bundle unpickles an sklearn Pipeline (StandardScaler +
+# LogisticRegression) which references numpy/pandas classes at load time;
+# missing pandas made get_model_b_bundle() fail and every prediction fall
+# back to the closed-form prior.
+pandas>=2.0,<3.0
 # Only needed when a trained bundle is present at
 # app/services/ml_models/model_b_nowcast.pkl. Without them the risk engine
 # logs a warning and falls back to its closed-form physical prior, which is a

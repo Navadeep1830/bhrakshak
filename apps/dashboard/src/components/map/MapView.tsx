@@ -13,9 +13,11 @@ const emptyStyle: StyleSpecification = {
   layers: [{ id: "bg", type: "background", paint: { "background-color": "#070D18" } }],
 };
 
-const CARTO_TILES = ["a", "b", "c", "d"].map(
-  (s) => `https://${s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png`
-);
+const CARTO_TILES = [
+  "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+];
 
 export const DISTRICT_VIEWS = [
   { name: "Aizawl", center: [92.72, 23.73] as [number, number], zoom: 9.4 },

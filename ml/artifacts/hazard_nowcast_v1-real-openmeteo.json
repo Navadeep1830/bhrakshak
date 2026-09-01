@@ -1,107 +1,198 @@
 {
   "name": "hazard_nowcast",
   "version": "v1-real-openmeteo",
-  "git_sha": "ace9660",
+  "git_sha": "e2ac97c",
   "metrics": {
     "model": "hazard_nowcast",
-    "backend": "lightgbm",
-    "n_train": 9126,
-    "n_test": 12783,
-    "n_positive_train": 20,
-    "n_positive_test": 10,
+    "backend": "sklearn-logistic",
+    "n_train": 14110,
+    "n_test": 4610,
+    "n_positive_train": 43,
+    "n_positive_test": 14,
     "split": "temporal: train <= 2014, test > 2014",
     "label_definition": "event in (t, t+24h]",
     "calibration": "isotonic",
-    "scale_pos_weight": 15.0,
-    "scale_pos_weight_selection": "out-of-fold average precision over [1.0, 5.0, 15.0, 40.0, 100.0]",
+    "calibration_detail": {
+      "isotonic_levels": 9,
+      "isotonic_levels_in_top_decile": 3,
+      "n_positive_fitted": 30,
+      "n_fitted": 10955,
+      "reason": "isotonic retained enough resolution"
+    },
+    "selected_model": "logistic-physical",
+    "selected_model_kind": "logistic",
+    "selected_model_features": [
+      "eff_rain_anom",
+      "rain_24h_anom",
+      "rain_72h_anom",
+      "rain_max_1h_anom",
+      "eff_rain_gridmax_anom",
+      "rain_24h_gridmax_anom"
+    ],
+    "scale_pos_weight": null,
+    "scale_pos_weight_selection": "out-of-fold event-day median percentile over [1.0, 5.0, 15.0, 40.0, 100.0]",
+    "model_selection": {
+      "rule": "one-standard-error: simplest candidate within 1 bootstrap SE of the best out-of-fold event-day median percentile",
+      "one_se_bar": 0.8394,
+      "leaderboard": [
+        {
+          "name": "rule-rain24h",
+          "oof_median_percentile": 0.8568,
+          "oof_se": 0.0349,
+          "oof_n_events": 30,
+          "oof_frac_top10": 0.367
+        },
+        {
+          "name": "rule-eff-rain",
+          "oof_median_percentile": 0.8452,
+          "oof_se": 0.0302,
+          "oof_n_events": 30,
+          "oof_frac_top10": 0.367
+        },
+        {
+          "name": "rule-rain24h-gridmax",
+          "oof_median_percentile": 0.7932,
+          "oof_se": 0.0357,
+          "oof_n_events": 30,
+          "oof_frac_top10": 0.3
+        },
+        {
+          "name": "rule-eff-rain-gridmax",
+          "oof_median_percentile": 0.8411,
+          "oof_se": 0.0282,
+          "oof_n_events": 30,
+          "oof_frac_top10": 0.367
+        },
+        {
+          "name": "logistic-physical",
+          "oof_median_percentile": 0.8753,
+          "oof_se": 0.0359,
+          "oof_n_events": 30,
+          "oof_frac_top10": 0.4
+        },
+        {
+          "name": "booster-shallow",
+          "oof_median_percentile": 0.8726,
+          "oof_se": 0.0573,
+          "oof_n_events": 30,
+          "oof_frac_top10": 0.467
+        },
+        {
+          "name": "booster-deep",
+          "oof_median_percentile": 0.8192,
+          "oof_se": 0.0977,
+          "oof_n_events": 30,
+          "oof_frac_top10": 0.4
+        }
+      ]
+    },
     "level_definition": "operational alert budget (fraction of days allowed at that level); thresholds frozen on the calibration split",
+    "evaluation_window": {
+      "catalogue_start": "2007-04-11",
+      "catalogue_end": "2017-07-10",
+      "rationale": "days outside the label catalogue cannot be positive, so they are unknown rather than negative; scoring them as negatives deflates the base rate and invalidates POD",
+      "days_excluded_before": 1092,
+      "days_excluded_after": 16693
+    },
     "per_level": [
       {
-        "pod": 1.0,
-        "far": 0.999,
-        "csi": 0.001,
-        "bias": 1139.1,
+        "pod": 0.714,
+        "far": 0.993,
+        "csi": 0.007,
+        "bias": 96.643,
         "tp": 10,
-        "fp": 11381,
-        "fn": 0,
+        "fp": 1343,
+        "fn": 4,
         "level": 1,
         "name": "L1",
         "alert_budget": 0.2,
-        "threshold": 0.0014,
-        "alert_days_per_year": 73.0
+        "raw_score_threshold": 0.466519,
+        "equivalent_calibrated_probability": 0.00452,
+        "alert_days_per_year": 73.0,
+        "realised_alert_fraction": 0.2935,
+        "realised_alert_days_per_year": 107.2
       },
       {
-        "pod": 0.1,
-        "far": 0.999,
-        "csi": 0.001,
-        "bias": 84.4,
-        "tp": 1,
-        "fp": 843,
-        "fn": 9,
+        "pod": 0.571,
+        "far": 0.99,
+        "csi": 0.01,
+        "bias": 56.429,
+        "tp": 8,
+        "fp": 782,
+        "fn": 6,
         "level": 2,
         "name": "L2",
         "alert_budget": 0.1,
-        "threshold": 0.0028,
-        "alert_days_per_year": 36.5
+        "raw_score_threshold": 0.641921,
+        "equivalent_calibrated_probability": 0.01205,
+        "alert_days_per_year": 36.5,
+        "realised_alert_fraction": 0.1714,
+        "realised_alert_days_per_year": 62.6
       },
       {
-        "pod": 0.1,
-        "far": 0.998,
-        "csi": 0.002,
-        "bias": 41.1,
-        "tp": 1,
-        "fp": 410,
+        "pod": 0.357,
+        "far": 0.985,
+        "csi": 0.015,
+        "bias": 23.571,
+        "tp": 5,
+        "fp": 325,
         "fn": 9,
         "level": 3,
         "name": "L3",
         "alert_budget": 0.03,
-        "threshold": 0.0116,
-        "alert_days_per_year": 11.0
+        "raw_score_threshold": 0.877401,
+        "equivalent_calibrated_probability": 0.01617,
+        "alert_days_per_year": 11.0,
+        "realised_alert_fraction": 0.0716,
+        "realised_alert_days_per_year": 26.1
       },
       {
-        "pod": 0.1,
-        "far": 0.998,
-        "csi": 0.002,
-        "bias": 41.1,
-        "tp": 1,
-        "fp": 410,
-        "fn": 9,
+        "pod": 0.214,
+        "far": 0.978,
+        "csi": 0.02,
+        "bias": 9.929,
+        "tp": 3,
+        "fp": 136,
+        "fn": 11,
         "level": 4,
         "name": "L4",
         "alert_budget": 0.01,
-        "threshold": 0.0116,
-        "alert_days_per_year": 3.7
+        "raw_score_threshold": 0.970011,
+        "equivalent_calibrated_probability": 0.01617,
+        "alert_days_per_year": 3.7,
+        "realised_alert_fraction": 0.0302,
+        "realised_alert_days_per_year": 11.0
       }
     ],
     "ranking": {
-      "pr_auc": 0.001,
+      "pr_auc": 0.0104,
       "pr_auc_ci95": [
-        0.0004,
-        0.0032
+        0.004,
+        0.0206
       ],
-      "roc_auc": 0.5677,
-      "test_base_rate": 0.00078,
-      "pr_auc_lift_vs_random": 1.32
+      "roc_auc": 0.8179,
+      "test_base_rate": 0.00304,
+      "pr_auc_lift_vs_random": 3.43
     },
     "event_day_ranking": {
-      "n_events": 10,
-      "median_percentile": 0.518,
-      "frac_in_top_20pct": 0.1,
-      "frac_in_top_10pct": 0.1,
-      "frac_in_top_5pct": 0.1,
-      "frac_in_top_1pct": 0.0,
-      "baseline_median_percentile": 0.845,
-      "baseline_frac_in_top_10pct": 0.4
+      "n_events": 14,
+      "median_percentile": 0.914,
+      "frac_in_top_20pct": 0.714,
+      "frac_in_top_10pct": 0.5,
+      "frac_in_top_5pct": 0.357,
+      "frac_in_top_1pct": 0.071,
+      "baseline_median_percentile": 0.826,
+      "baseline_frac_in_top_10pct": 0.286
     },
     "caine_1980_baseline": {
-      "pod": 0.0,
-      "far": 1.0,
-      "csi": 0.0,
-      "bias": 5.4,
-      "tp": 0,
-      "fp": 54,
-      "fn": 10,
-      "alert_days_per_year": 1.5
+      "pod": 0.071,
+      "far": 0.933,
+      "csi": 0.036,
+      "bias": 1.071,
+      "tp": 1,
+      "fp": 14,
+      "fn": 13,
+      "alert_days_per_year": 1.2
     },
     "regional_id_threshold": {
       "form": "alarm when rain_24h >= k x that district's own p90; k set by alert budget",
@@ -109,81 +200,93 @@
       "selection": "k = training-period quantile at each operational alert budget",
       "per_budget": [
         {
-          "pod": 0.6,
-          "far": 0.998,
-          "csi": 0.002,
-          "bias": 258.3,
-          "tp": 6,
-          "fp": 2577,
-          "fn": 4,
+          "pod": 0.571,
+          "far": 0.992,
+          "csi": 0.008,
+          "bias": 74.0,
+          "tp": 8,
+          "fp": 1028,
+          "fn": 6,
           "budget": 0.2,
-          "k_x_p90": 0.55,
-          "realised_alert_days_per_year": 73.8
+          "k_x_p90": 0.62,
+          "realised_alert_days_per_year": 82.1
         },
         {
-          "pod": 0.5,
-          "far": 0.996,
-          "csi": 0.004,
-          "bias": 137.7,
+          "pod": 0.357,
+          "far": 0.991,
+          "csi": 0.009,
+          "bias": 41.143,
           "tp": 5,
-          "fp": 1372,
-          "fn": 5,
+          "fp": 571,
+          "fn": 9,
           "budget": 0.1,
-          "k_x_p90": 0.97,
-          "realised_alert_days_per_year": 39.3
+          "k_x_p90": 1.0,
+          "realised_alert_days_per_year": 45.6
         },
         {
-          "pod": 0.0,
-          "far": 1.0,
-          "csi": 0.0,
-          "bias": 42.1,
-          "tp": 0,
-          "fp": 421,
-          "fn": 10,
+          "pod": 0.071,
+          "far": 0.995,
+          "csi": 0.004,
+          "bias": 15.429,
+          "tp": 1,
+          "fp": 215,
+          "fn": 13,
           "budget": 0.03,
-          "k_x_p90": 1.95,
-          "realised_alert_days_per_year": 12.0
+          "k_x_p90": 1.86,
+          "realised_alert_days_per_year": 17.1
         },
         {
-          "pod": 0.0,
-          "far": 1.0,
-          "csi": 0.0,
-          "bias": 15.8,
-          "tp": 0,
-          "fp": 158,
-          "fn": 10,
+          "pod": 0.071,
+          "far": 0.988,
+          "csi": 0.011,
+          "bias": 5.786,
+          "tp": 1,
+          "fp": 80,
+          "fn": 13,
           "budget": 0.01,
-          "k_x_p90": 3.05,
-          "realised_alert_days_per_year": 4.5
+          "k_x_p90": 2.96,
+          "realised_alert_days_per_year": 6.4
         }
       ],
       "equivalent_mm_per_24h_by_district": {
         "ML-EKH": {
-          "top 20%": 16.2,
-          "top 10%": 28.7,
-          "top 3%": 57.8,
-          "top 1%": 90.7
+          "top 20%": 18.4,
+          "top 10%": 29.7,
+          "top 3%": 55.3,
+          "top 1%": 87.9
+        },
+        "MN-IMP": {
+          "top 20%": 6.3,
+          "top 10%": 10.1,
+          "top 3%": 18.8,
+          "top 1%": 29.8
         },
         "MN-NON": {
-          "top 20%": 6.7,
-          "top 10%": 11.8,
-          "top 3%": 23.7,
-          "top 1%": 37.3
+          "top 20%": 7.7,
+          "top 10%": 12.3,
+          "top 3%": 23.0,
+          "top 1%": 36.5
         },
         "MZ-AIZ": {
-          "top 20%": 7.7,
-          "top 10%": 13.5,
-          "top 3%": 27.2,
-          "top 1%": 42.8
+          "top 20%": 8.8,
+          "top 10%": 14.2,
+          "top 3%": 26.4,
+          "top 1%": 41.9
+        },
+        "SK-GNG": {
+          "top 20%": 24.9,
+          "top 10%": 40.0,
+          "top 3%": 74.5,
+          "top 1%": 118.5
         }
       },
       "caine_point_threshold_mm_24h": 103.0
     },
     "caine_threshold_mm_24h": 102.99,
     "lead_time_h": {
-      "n": 10,
+      "n": 14,
       "median_h": 15.0,
-      "mean_h": 14.8
+      "mean_h": 15.2
     },
     "features": [
       "rain_24h",
@@ -193,121 +296,120 @@
       "eff_rain",
       "is_monsoon",
       "sin_doy",
-      "cos_doy"
-    ],
-    "features_unavailable": [
+      "cos_doy",
       "rain_24h_gridmax",
       "rain_72h_gridmax",
       "rain_1h_gridmax",
       "eff_rain_gridmax",
-      "rain_24h_gridmax_anom"
+      "rain_24h_gridmax_anom",
+      "eff_rain_gridmax_anom"
     ],
+    "features_unavailable": [],
     "aois_used": [
       "ML-EKH",
-      "MN-NON",
-      "MZ-AIZ"
-    ],
-    "aois_skipped_incomplete_cache": [
       "MN-IMP",
+      "MN-NON",
+      "MZ-AIZ",
       "SK-GNG"
     ],
-    "git_sha": "ace9660",
+    "aois_skipped_incomplete_cache": [],
+    "git_sha": "e2ac97c",
     "synthetic": false,
     "noney_2022_case_study": {
       "event": "Noney / Tupul, Manipur - June 2022",
       "event_date": "2022-06-29",
-      "note": "Case study, not a metric: the event post-dates the GLC label period, so no ground-truth label exists in training data.",
-      "peak_probability": 0.001,
-      "peak_date": "2022-06-27",
+      "note": "Case study, not a metric: the event post-dates the GLC label period, so no ground-truth label exists in training data. Read the shape of the run-up, not the absolute probability.",
+      "peak_probability": 0.0162,
+      "peak_date": "2022-06-17",
       "timeline": [
         {
           "date": "2022-06-15",
-          "p": 0.0,
-          "rain_24h_mm": 26.3
+          "p": 0.0084,
+          "rain_24h_mm": 16.8
         },
         {
           "date": "2022-06-16",
-          "p": 0.0,
-          "rain_24h_mm": 26.4
+          "p": 0.012,
+          "rain_24h_mm": 21.7
         },
         {
           "date": "2022-06-17",
-          "p": 0.0,
-          "rain_24h_mm": 47.7
+          "p": 0.0162,
+          "rain_24h_mm": 33.3
         },
         {
           "date": "2022-06-18",
-          "p": 0.0,
-          "rain_24h_mm": 53.7
+          "p": 0.0162,
+          "rain_24h_mm": 47.0
         },
         {
           "date": "2022-06-19",
-          "p": 0.0,
-          "rain_24h_mm": 16.2
+          "p": 0.012,
+          "rain_24h_mm": 14.8
         },
         {
           "date": "2022-06-20",
-          "p": 0.0,
-          "rain_24h_mm": 11.2
+          "p": 0.0161,
+          "rain_24h_mm": 14.0
         },
         {
           "date": "2022-06-21",
-          "p": 0.0,
-          "rain_24h_mm": 6.1
-        },
-        {
-          "date": "2022-06-22",
-          "p": 0.0,
-          "rain_24h_mm": 32.0
-        },
-        {
-          "date": "2022-06-23",
-          "p": 0.0,
-          "rain_24h_mm": 9.1
-        },
-        {
-          "date": "2022-06-24",
-          "p": 0.0,
-          "rain_24h_mm": 11.2
-        },
-        {
-          "date": "2022-06-25",
-          "p": 0.0,
-          "rain_24h_mm": 8.8
-        },
-        {
-          "date": "2022-06-26",
-          "p": 0.0,
-          "rain_24h_mm": 3.5
-        },
-        {
-          "date": "2022-06-27",
-          "p": 0.001,
+          "p": 0.012,
           "rain_24h_mm": 7.4
         },
         {
+          "date": "2022-06-22",
+          "p": 0.0162,
+          "rain_24h_mm": 17.9
+        },
+        {
+          "date": "2022-06-23",
+          "p": 0.012,
+          "rain_24h_mm": 7.1
+        },
+        {
+          "date": "2022-06-24",
+          "p": 0.012,
+          "rain_24h_mm": 11.9
+        },
+        {
+          "date": "2022-06-25",
+          "p": 0.012,
+          "rain_24h_mm": 6.6
+        },
+        {
+          "date": "2022-06-26",
+          "p": 0.0045,
+          "rain_24h_mm": 3.2
+        },
+        {
+          "date": "2022-06-27",
+          "p": 0.012,
+          "rain_24h_mm": 6.9
+        },
+        {
           "date": "2022-06-28",
-          "p": 0.0,
-          "rain_24h_mm": 9.2
+          "p": 0.0045,
+          "rain_24h_mm": 8.7
         },
         {
           "date": "2022-06-29",
-          "p": 0.0,
-          "rain_24h_mm": 9.5
+          "p": 0.0045,
+          "rain_24h_mm": 8.3
         },
         {
           "date": "2022-06-30",
-          "p": 0.0,
-          "rain_24h_mm": 5.4
+          "p": 0.0045,
+          "rain_24h_mm": 6.7
         },
         {
           "date": "2022-07-01",
-          "p": 0.0,
-          "rain_24h_mm": 6.9
+          "p": 0.0045,
+          "rain_24h_mm": 10.6
         }
       ]
     }
   },
   "notes": "Real Open-Meteo rainfall + NASA GLC labels. Temporal split; label = event in (t, t+24h]. Class weight and alert-level thresholds both chosen out of fold. Levels are alert budgets, not probability cuts.",
-  "trained_at": "2026-08-29T17:58:45.817455+00:00"
+  "trained_at": "2026-09-01T15:13:11.814758+00:00"
 }
