@@ -257,16 +257,32 @@ def classify_photo(
     claimed_lon: float | None = None,
     claimed_time: str | None = None,
 ) -> GeoVerifyResult:
-    """Full pipeline: EXIF provenance -> pixel signature -> verdict."""
-    # --- Input validation: reject empty / corrupt / tiny uploads -----------
+    """Full pipeline: EXIF provenance -> pixel signature -> verdict.
+
+    Garbage input never raises: an undecodable upload comes back UNSCOREABLE
+    so a bad photo in a batch cannot 500 the operator's sync.
+    """
+    # --- Input validation: empty / corrupt / tiny uploads ------------------
     if not data:
-        raise ValueError("Empty image data — nothing to classify")
+        exif = {"has_exif": False, "lat": None, "lon": None, "taken_at": None}
+        return GeoVerifyResult(
+            "UNSCOREABLE", 0.0, exif, None, ["empty_upload"],
+            {"width": 0, "height": 0, "fresh_soil_frac": 0.0, "horizontal_edge_energy": 0.0,
+             "rock_frac": 0.0, "vegetation_frac": 0.0, "sky_frac": 0.0,
+             "luminance_variance": 0.0},
+        )
     try:
         from PIL import Image as _PILImage
         _probe = _PILImage.open(io.BytesIO(data))
         _probe.verify()  # checks structural integrity without decoding
     except Exception as exc:
-        raise ValueError(f"Invalid or corrupt image data: {exc}") from exc
+        exif = {"has_exif": False, "lat": None, "lon": None, "taken_at": None}
+        return GeoVerifyResult(
+            "UNSCOREABLE", 0.0, exif, None, ["image_decode_failed"],
+            {"width": 0, "height": 0, "fresh_soil_frac": 0.0, "horizontal_edge_energy": 0.0,
+             "rock_frac": 0.0, "vegetation_frac": 0.0, "sky_frac": 0.0,
+             "luminance_variance": 0.0},
+        )
 
     exif = exif_gps_and_time(data)
     flags: list[str] = []

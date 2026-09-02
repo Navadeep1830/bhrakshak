@@ -1417,8 +1417,9 @@ def main(train_end_year: int = 2014) -> dict:
 class _PicklableCalibrator:
     """Monotone grid calibrator captured from fit_calibrator()'s closure.
 
-    Module-level so joblib can pickle it by reference: nested classes pickle
-    by qualified path and fail with PicklingError.
+    Kept for backward compatibility with exports made before the class moved
+    to the API tree; new exports must use the API-side class so the pickle
+    resolves in the deployed container (which mounts only apps/api/app).
     """
 
     def __init__(self, xs, ys):
@@ -1427,6 +1428,24 @@ class _PicklableCalibrator:
 
     def predict(self, x):
         return np.interp(np.asarray(x, dtype=float), self.xs, self.ys)
+
+
+def _api_calibrator_class():
+    """Import the API-side PicklableCalibrator, adding apps/api to sys.path.
+
+    The exported bundle pickles the class by reference, so the class must be
+    importable at *unpickle* time inside the API process. Defining it in
+    `app.services.ml_models.calibrator` (the API's own package, which the API
+    image mounts) is what makes that work; ml/ is not shipped with the API.
+    """
+    import sys
+
+    api_root = ARTIFACTS.parents[1] / "apps" / "api"
+    if str(api_root) not in sys.path:
+        sys.path.insert(0, str(api_root))
+    from app.services.ml_models.calibrator import PicklableCalibrator
+
+    return PicklableCalibrator
 
 
 def _export_api_bundle(winner, model, backend, calib_name, calib_predict, use_feats, ref, metrics) -> None:
@@ -1472,7 +1491,7 @@ def _export_api_bundle(winner, model, backend, calib_name, calib_predict, use_fe
     xs = np.concatenate([[lo - 1e6], grid, [hi + 1e6]])
     ys = np.concatenate([[grid_vals[0]], grid_vals, [grid_vals[-1]]])
 
-    cal_obj = _PicklableCalibrator(xs, ys)
+    cal_obj = _api_calibrator_class()(xs, ys)
 
     bundle_common = {
         "name": MODEL_NAME,

@@ -116,15 +116,7 @@ def get_model_b_bundle():
     if not MODEL_B_PATH.exists():
         return None
     try:
-        import sys
         import joblib
-        try:
-            from ml.models.hazard_nowcast import _PicklableCalibrator
-            main_mod = sys.modules.get("__main__")
-            if main_mod is not None and not hasattr(main_mod, "_PicklableCalibrator"):
-                setattr(main_mod, "_PicklableCalibrator", _PicklableCalibrator)
-        except ImportError:
-            pass
 
         bundle = joblib.load(MODEL_B_PATH)
     except Exception as e:
@@ -234,16 +226,18 @@ def predict_model_b(
     rain_24h = float(rain_24h or 0.0)
 
     # --- assemble only what we actually measured -------------------------
+    # rain_72h / rain_7d / eff_rain are measured columns on rainfall_obs and
+    # arrive via `antecedent`. When there is no observation row they stay
+    # None and the ML bundle refuses to run (see the gap check below) — the
+    # physical calibration serves instead. Guessing them here is exactly the
+    # "invented feature" failure test_model_contract forbids: a number that
+    # looks identical to a fully-observed prediction. The poll task and the
+    # storm injector both persist real values, so live traffic runs the
+    # bundle on genuinely measured windows.
     rain_48h = _observed(antecedent, "rain_48h")
     rain_72h = _observed(antecedent, "rain_72h")
     rain_7d = _observed(antecedent, "rain_7d")
     eff_rain = _observed(antecedent, "eff_rain")
-    if eff_rain is None and rain_24h is not None:
-        eff_rain = rain_24h * 1.15  # lower-bound estimate when no DB row is attached
-    if rain_72h is None and rain_24h is not None:
-        rain_72h = rain_24h * 1.35
-    if rain_7d is None and rain_24h is not None:
-        rain_7d = rain_24h * 1.80
     soil_val = float(soil_moisture) if soil_moisture is not None else None
 
     known = {
