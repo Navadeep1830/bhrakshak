@@ -766,17 +766,39 @@ async def render_message(db: AsyncSession, key: str, lang: str, village: str, le
     return template.format(village=village, level=level_name, action="Follow district admin instructions")
 
 
-async def publish_live(event_type: str, payload: dict) -> None:
-    """Best-effort Redis pub/sub broadcast consumed by /ws/live."""
-    try:
+_REDIS_PUBLISHER = None
+
+
+def _get_redis_publisher():
+    """Shared lazy Redis client for live fan-out.
+
+    Used to open a fresh connection per event (fine at demo cadence, a churn
+    pit at production rates). One process-wide client with reconnect-on-error
+    semantics replaces it; pool-level failures degrade to a log line, never
+    an alert loss.
+    """
+    global _REDIS_PUBLISHER
+    if _REDIS_PUBLISHER is None:
         import redis.asyncio as aioredis
 
         from app.core.config import settings
 
-        r = aioredis.from_url(settings.redis_url)
+        _REDIS_PUBLISHER = aioredis.from_url(
+            settings.redis_url, max_connections=20, decode_responses=True,
+        )
+    return _REDIS_PUBLISHER
+
+
+async def publish_live(event_type: str, payload: dict) -> None:
+    """Best-effort Redis pub/sub broadcast consumed by /ws/live."""
+    try:
+        r = _get_redis_publisher()
         await r.publish("bhrakshak:live", json.dumps({"type": event_type, **payload}))
-        await r.aclose()
     except Exception as e:  # pragma: no cover
+        # A dead publisher must not fail the alert write: reset so the next
+        # event gets a fresh client, and surface the failure loudly.
+        global _REDIS_PUBLISHER
+        _REDIS_PUBLISHER = None
         log.warning("live publish failed: %s", e)
 
 

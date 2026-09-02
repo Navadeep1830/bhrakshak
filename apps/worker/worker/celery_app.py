@@ -6,7 +6,8 @@ celery_app = Celery(
     "bhrakshak",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["worker.tasks.ingest", "worker.tasks.risk", "worker.tasks.seismic"],
+    include=["worker.tasks.ingest", "worker.tasks.risk", "worker.tasks.seismic",
+             "worker.tasks.sensors"],
 )
 
 celery_app.conf.update(
@@ -27,5 +28,6 @@ celery_app.conf.update(
                                  "options": {"countdown": 30}},
         "poll-seismic-hourly": {"task": "tasks.poll_seismic", "schedule": 60 * 60},
         "satellite-etl-daily": {"task": "tasks.satellite_etl", "schedule": 24 * 60 * 60},
+        "sensor-fleet-5min": {"task": "tasks.poll_sensor_fleet", "schedule": 5 * 60},
     },
 )

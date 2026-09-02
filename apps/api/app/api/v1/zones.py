@@ -71,7 +71,29 @@ async def list_zones(
         env = gfunc.ST_MakeEnvelope(minlon, minlat, maxlon, maxlat, 4326)
         q = q.where(gfunc.ST_Intersects(Zone.geom, env))
     zones = (await db.execute(q)).scalars().all()
-    outs = [await _zone_out(db, z) for z in zones]
+
+    # one query for every live risk cell instead of one db.get per zone
+    # (536 round-trips per dashboard refresh before this)
+    cells = {
+        c.zone_id: c
+        for c in (await db.execute(select(RiskCell))).scalars().all()
+    }
+    outs = []
+    for z in zones:
+        cell = cells.get(z.id)
+        outs.append(ZoneOut(
+            id=z.id,
+            zone_code=z.zone_code,
+            name=z.name,
+            district=z.district,
+            state=z.state,
+            susc_mean=z.susc_mean,
+            susc_p90=z.susc_p90,
+            population=z.population,
+            road_km=z.road_km,
+            hazard_level=cell.hazard_level if cell else 0,
+            prob_24h=cell.prob_24h if cell else None,
+        ))
     if level_min is not None:
         outs = [o for o in outs if o.hazard_level >= level_min]
     return outs
