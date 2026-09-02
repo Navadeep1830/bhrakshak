@@ -15,9 +15,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        // Default public cloud tunnel URL
-        buildConfigField("String", "API_BASE_URL", "\"https://weak-guests-rule.loca.lt\"")
-        buildConfigField("String", "WS_URL", "\"wss://weak-guests-rule.loca.lt/ws/live\"")
+        // Fixed public cloud tunnel URL
+        buildConfigField("String", "API_BASE_URL", "\"https://bhrakshak-api-demo.loca.lt\"")
+        buildConfigField("String", "WS_URL", "\"wss://bhrakshak-api-demo.loca.lt/ws/live\"")
     }
 
     buildTypes {

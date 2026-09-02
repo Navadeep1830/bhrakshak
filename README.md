@@ -22,8 +22,9 @@ make seed        # 4 pilot districts -> ~5km hex-grid zones clipped to boundarie
 | URL | What |
 |---|---|
 | http://localhost:3000 | Command Center dashboard (MapLibre 3D + ECharts SHAP) |
+| https://bhrakshak-dashboard-demo.loca.lt | Public Website Dashboard (Command Center Web Access) |
 | http://localhost:5173 | Field PWA (offline reports, 8 languages) |
-| https://weak-guests-rule.loca.lt | Public Cloud Tunnel endpoint (Mobile App & Remote Clients) |
+| https://bhrakshak-api-demo.loca.lt | Public Cloud API Endpoint (Mobile App & Remote Clients) |
 | http://localhost:8000/docs | API (OpenAPI) |
 | http://localhost:3001/zones/8/60/28.pbf | Martin vector tiles |
 | http://localhost:5555 | Flower (Celery ops view) |
@@ -36,7 +37,7 @@ Demo logins: `admin@bhrakshak.in / Admin@123`, `citizen@bhrakshak.in / Citizen@1
 The mobile experience connects directly to the central FastAPI backend:
 
 - **Pre-compiled APK**: `/home/sudpy/Downloads/bhrakshak-field-latest.apk`
-- **Default Server URL**: `https://weak-guests-rule.loca.lt` (pre-configured)
+- **Default Server URL**: `https://bhrakshak-api-demo.loca.lt` (fixed public domain)
 - **Field PWA**: http://localhost:5173 (Works in browser or "Add to Home Screen")
 
 ### Mobile Features & Testing Flow
