@@ -58,10 +58,22 @@ def susc_band(susc_mean: float | None) -> str:
 
 
 def threshold_tier(rain_1h: float, rain_24h: float, susc_mean: float | None) -> int:
+    rain_1h = max(0.0, float(rain_1h or 0.0))
+    rain_24h = max(0.0, float(rain_24h or 0.0))
     band = THRESHOLDS_BY_SUSC_BAND[susc_band(susc_mean)]
     level = 0
     for r24, r1h, lvl in band:
-        if rain_24h >= r24 or (rain_24h >= r24 * 0.6 and rain_1h >= r1h):
+        # Three independent triggers (any one is sufficient):
+        # 1. Cumulative 24h rain alone exceeds the I-D threshold
+        # 2. Moderate 24h (≥60% threshold) combined with hourly intensity
+        # 3. Pure intensity-only: extreme hourly rate even with near-zero
+        #    24h accumulation — covers the first 20-30 minutes of a
+        #    cloudburst before enough rain has accumulated to satisfy (1).
+        #    The 2× multiplier reflects the higher bar when antecedent
+        #    saturation has not yet developed.
+        if (rain_24h >= r24
+                or (rain_24h >= r24 * 0.6 and rain_1h >= r1h)
+                or rain_1h >= r1h * 2.0):
             level = max(level, lvl)
     return level
 
@@ -104,7 +116,15 @@ def get_model_b_bundle():
     if not MODEL_B_PATH.exists():
         return None
     try:
+        import sys
         import joblib
+        try:
+            from ml.models.hazard_nowcast import _PicklableCalibrator
+            main_mod = sys.modules.get("__main__")
+            if main_mod is not None and not hasattr(main_mod, "_PicklableCalibrator"):
+                setattr(main_mod, "_PicklableCalibrator", _PicklableCalibrator)
+        except ImportError:
+            pass
 
         bundle = joblib.load(MODEL_B_PATH)
     except Exception as e:
@@ -218,6 +238,12 @@ def predict_model_b(
     rain_72h = _observed(antecedent, "rain_72h")
     rain_7d = _observed(antecedent, "rain_7d")
     eff_rain = _observed(antecedent, "eff_rain")
+    if eff_rain is None and rain_24h is not None:
+        eff_rain = rain_24h * 1.15  # lower-bound estimate when no DB row is attached
+    if rain_72h is None and rain_24h is not None:
+        rain_72h = rain_24h * 1.35
+    if rain_7d is None and rain_24h is not None:
+        rain_7d = rain_24h * 1.80
     soil_val = float(soil_moisture) if soil_moisture is not None else None
 
     known = {
@@ -334,6 +360,10 @@ def predict_model_b(
                     )
                     raw_score = float(blend[0])
                     cal_prob = float(np.asarray(calibrator.predict(blend))[0])
+                    prob = max(0.0, min(1.0, cal_prob))
+                elif calibrator is not None and feats:
+                    raw_score = float(measured[feats[0]])
+                    cal_prob = float(np.asarray(calibrator.predict([raw_score]))[0])
                     prob = max(0.0, min(1.0, cal_prob))
             except Exception as exc:
                 log.warning("Model B inference error (%s) - falling back to physical calibration", exc)

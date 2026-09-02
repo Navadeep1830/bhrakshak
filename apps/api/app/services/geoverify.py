@@ -246,6 +246,10 @@ class GeoVerifyResult:
         }
 
 
+# Minimum dimensions to be a plausible field photo (not a 1×1 pixel trick).
+_MIN_SIDE = 50
+
+
 def classify_photo(
     data: bytes,
     *,
@@ -254,6 +258,16 @@ def classify_photo(
     claimed_time: str | None = None,
 ) -> GeoVerifyResult:
     """Full pipeline: EXIF provenance -> pixel signature -> verdict."""
+    # --- Input validation: reject empty / corrupt / tiny uploads -----------
+    if not data:
+        raise ValueError("Empty image data — nothing to classify")
+    try:
+        from PIL import Image as _PILImage
+        _probe = _PILImage.open(io.BytesIO(data))
+        _probe.verify()  # checks structural integrity without decoding
+    except Exception as exc:
+        raise ValueError(f"Invalid or corrupt image data: {exc}") from exc
+
     exif = exif_gps_and_time(data)
     flags: list[str] = []
 
@@ -278,6 +292,14 @@ def classify_photo(
     if sig.width == 0:
         return GeoVerifyResult("UNSCOREABLE", 0.0, exif, gps_mismatch, ["image_decode_failed"], s)
 
+    # Reject images too small to carry meaningful texture evidence.
+    if sig.width < _MIN_SIDE or sig.height < _MIN_SIDE:
+        flags.append("image_too_small")
+        return GeoVerifyResult(
+            "UNSCOREABLE", 0.0, exif, gps_mismatch,
+            flags + [f"min_side_{_MIN_SIDE}px_required"], s,
+        )
+
     z = (
         W_SOIL * sig.fresh_soil_frac
         + W_EDGE * sig.horizontal_edge_energy
@@ -287,6 +309,15 @@ def classify_photo(
         + W_LUMVAR * sig.luminance_variance
         + BIAS
     )
+
+    # Uniform-colour penalty: a real field photo always has texture —
+    # luminance_variance ~0 means a solid-colour rectangle (e.g. a brown
+    # wall or a ploughed-field crop) that would otherwise score POSITIVE.
+    # This penalty moves it from POSITIVE (~0.77) into POSSIBLE territory.
+    if sig.luminance_variance < 1.0 and sig.horizontal_edge_energy < 0.5:
+        z -= 0.8  # pushes logistic from ~0.77 → ~0.55 (POSSIBLE)
+        flags.append("uniform_texture_penalty")
+
     prob = 1.0 / (1.0 + math.exp(-z))
 
     if "gps_mismatch>300m" in flags:

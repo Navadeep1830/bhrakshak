@@ -2,6 +2,18 @@
   "source": "aws-terrarium",
   "zoom": 12,
   "aois": {
+    "MZ-AIZ": {
+      "district": "Aizawl",
+      "shape": [
+        2074,
+        1747
+      ],
+      "res_m": 34.9,
+      "elev_min": 33.0,
+      "elev_max": 1899.0,
+      "source": "aws-terrarium-z12",
+      "synthetic": false
+    },
     "ML-EKH": {
       "district": "East Khasi Hills",
       "shape": [
@@ -11,6 +23,42 @@
       "res_m": 34.5,
       "elev_min": 0.0,
       "elev_max": 2723.0,
+      "source": "aws-terrarium-z12",
+      "synthetic": false
+    },
+    "MN-NON": {
+      "district": "Noney",
+      "shape": [
+        1450,
+        1602
+      ],
+      "res_m": 34.6,
+      "elev_min": 206.0,
+      "elev_max": 2690.0,
+      "source": "aws-terrarium-z12",
+      "synthetic": false
+    },
+    "MN-IMP": {
+      "district": "Imphal West",
+      "shape": [
+        1157,
+        1049
+      ],
+      "res_m": 34.7,
+      "elev_min": 548.0,
+      "elev_max": 2519.0,
+      "source": "aws-terrarium-z12",
+      "synthetic": false
+    },
+    "SK-GNG": {
+      "district": "Gangtok",
+      "shape": [
+        1480,
+        1106
+      ],
+      "res_m": 33.9,
+      "elev_min": 307.0,
+      "elev_max": 5145.0,
       "source": "aws-terrarium-z12",
       "synthetic": false
     }

@@ -77,6 +77,21 @@ def simulate_voellmy_debris_runout(
          P_impact = 0.5 * C_D * rho_debris * v^2 / 1000.0  [kPa = kN/m^2]
     """
     p = params or VoellmyParams()
+
+    # --- Input validation: reject physically impossible parameters --------
+    if initial_volume_m3 <= 0:
+        raise ValueError(
+            f"initial_volume_m3 must be positive, got {initial_volume_m3}")
+    if scarp_elevation_m <= 0:
+        raise ValueError(
+            f"scarp_elevation_m must be positive (height above valley floor), "
+            f"got {scarp_elevation_m}")
+    if valley_length_m <= 0:
+        raise ValueError(
+            f"valley_length_m must be positive, got {valley_length_m}")
+    if step_size_m <= 0:
+        raise ValueError(f"step_size_m must be positive, got {step_size_m}")
+
     g = p.gravity
     mu = p.coulomb_friction_mu
     xi = p.turbulent_drag_xi
