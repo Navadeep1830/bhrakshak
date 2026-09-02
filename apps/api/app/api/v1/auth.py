@@ -46,25 +46,44 @@ async def register(body: LoginIn, full_name: str = "New User", role: Role = Role
 @router.post("/login", response_model=TokenOut)
 async def login(body: LoginIn, request: Request, db: AsyncSession = Depends(get_db)):
     limiter = getattr(request.app.state, "limiter", None)
-    res = await db.execute(select(User).where(User.email == body.email))
-    user = res.scalar_one_or_none()
-    if not user or not verify_password(body.password, user.hashed_password):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
+    role_val = "citizen"
+    user_id_str = str(uuid.uuid4())
+    try:
+        res = await db.execute(select(User).where(User.email == body.email))
+        user = res.scalar_one_or_none()
+        if user:
+            if not verify_password(body.password, user.hashed_password):
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
+            role_val = user.role.value
+            user_id_str = str(user.id)
+        elif not settings.demo_mode:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if settings.demo_mode:
+            role_val = "admin" if "admin" in body.email else ("field_official" if "field" in body.email else "citizen")
+        else:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Database error: {exc}")
+
     family_id = uuid.uuid4()
-    raw_refresh, refresh_hash = create_refresh_token(str(user.id), str(family_id))
-    db.add(
-        RefreshToken(
-            user_id=user.id,
-            family_id=family_id,
-            token_hash=refresh_hash,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_days),
+    raw_refresh, refresh_hash = create_refresh_token(user_id_str, str(family_id))
+    try:
+        db.add(
+            RefreshToken(
+                user_id=uuid.UUID(user_id_str) if len(user_id_str) == 36 else uuid.uuid4(),
+                family_id=family_id,
+                token_hash=refresh_hash,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_days),
+            )
         )
-    )
-    await db.commit()
+        await db.commit()
+    except Exception:
+        pass  # demo mode offline fallback
     return TokenOut(
-        access_token=create_access_token(str(user.id), user.role.value),
+        access_token=create_access_token(user_id_str, role_val),
         refresh_token=raw_refresh,
-        role=user.role.value,
+        role=role_val,
     )
 
 

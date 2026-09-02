@@ -149,7 +149,7 @@ class MainActivity : AppCompatActivity() {
         setPadding(0, 8, 0, 8)
     }
 
-    private fun button(text: String, bg: Int, onClick: (Button) -> Unit): Button =
+    private fun button(text: String, bg: Int, onClick: () -> Unit): Button =
         Button(this).apply {
             this.text = text
             val rippleColor = 0x40FFFFFF
@@ -168,11 +168,8 @@ class MainActivity : AppCompatActivity() {
             )
             setTextColor(0xFFFFFFFF.toInt())
             setPadding(0, 28, 0, 28)
-            setOnClickListener { onClick(this) }
+            setOnClickListener { onClick() }
         }
-
-    private fun button(text: String, bg: Int, onClickSimple: () -> Unit): Button =
-        button(text, bg) { onClickSimple() }
 
     // ------------------------------------------------------------------ login
     private fun showLogin() {
@@ -192,7 +189,8 @@ class MainActivity : AppCompatActivity() {
         val email = EditText(this).apply { hint = "email"; setSingleLine() }
         val pw = EditText(this).apply { hint = "password"; inputType = 0x81 }
         root.addView(email); root.addView(pw)
-        root.addView(button("LOGIN", 0xFFEA580C.toInt()) { btn ->
+        lateinit var loginBtn: Button
+        loginBtn = button("LOGIN", 0xFFEA580C.toInt()) {
             val em = email.text.toString().trim()
             val pass = pw.text.toString()
             if (em.isEmpty() || pass.isEmpty()) {
@@ -208,9 +206,9 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Set visual loading state
-            btn.isEnabled = false
-            btn.text = "CONNECTING TO SERVER..."
-            btn.alpha = 0.7f
+            loginBtn.isEnabled = false
+            loginBtn.text = "CONNECTING TO SERVER..."
+            loginBtn.alpha = 0.7f
             Toast.makeText(this@MainActivity, "Connecting to ${ApiConfig.baseUrl}...", Toast.LENGTH_SHORT).show()
 
             lifecycleScope.launch {
@@ -221,14 +219,15 @@ class MainActivity : AppCompatActivity() {
                     LiveAlertService.start(this@MainActivity)
                     showHome()
                 } catch (e: Exception) {
-                    btn.isEnabled = true
-                    btn.text = "LOGIN"
-                    btn.alpha = 1.0f
+                    loginBtn.isEnabled = true
+                    loginBtn.text = "LOGIN"
+                    loginBtn.alpha = 1.0f
                     val cause = e.localizedMessage ?: e.message ?: "Server unreachable"
                     Toast.makeText(this@MainActivity, "Login Failed: $cause\nCheck server URL & Wi-Fi connection.", Toast.LENGTH_LONG).show()
                 }
             }
-        })
+        }
+        root.addView(loginBtn)
         root.addView(label("Demo: citizen@bhrakshak.in / Citizen@123 · field.noney@bhrakshak.in / Field@123"))
     }
 
