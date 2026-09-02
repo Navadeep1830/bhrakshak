@@ -332,17 +332,33 @@ function ReportsInbox() {
   const [verifiedIds, setVerifiedIds] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    apiGet<any[]>("/api/v1/reports")
-      .then(setReports)
-      .catch(() => setReports([]));
+    (async () => {
+      try {
+        // staff-gated endpoint: login like AlertConsole does
+        const login = await fetch(`${endpoints.API}/api/v1/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: "admin@bhrakshak.in", password: "Admin@123" }),
+        }).then((r) => r.json());
+        const rows = await apiGet<any[]>("/api/v1/reports?status_filter=pending&limit=50", login.access_token);
+        setReports(rows);
+      } catch {
+        setReports([]);
+      }
+    })();
   }, []);
 
   const handleVerify = async (id: string, decision: "verified" | "rejected") => {
     setVerifiedIds((prev) => ({ ...prev, [id]: decision }));
     try {
+      const login = await fetch(`${endpoints.API}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "admin@bhrakshak.in", password: "Admin@123" }),
+      }).then((r) => r.json());
       await fetch(`${endpoints.API}/api/v1/reports/${id}/verify?decision=${decision}`, {
         method: "PATCH",
-        headers: { "Bypass-Tunnel-Remainder": "true" },
+        headers: { Authorization: `Bearer ${login.access_token}` },
       });
     } catch {
       /* local state update */

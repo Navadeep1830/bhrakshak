@@ -64,35 +64,34 @@ async def sync_reports(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Idempotent offline sync: upsert by client UUID; duplicates merged."""
+    """Idempotent offline sync: upsert by client UUID; duplicates merged.
+
+    Replay-safety is the contract the field PWA depends on (it retries on
+    every 'online' event): a batch replayed with the same client UUIDs must
+    be accepted=0, synced, and must not duplicate — in the DB or in the
+    AI-Inbox mirror below.
+    """
     accepted, merged, flagged, synced = 0, 0, 0, []
     for item in batch.reports:
-        synced.append(item.client_id)
+        exists = await db.get(CitizenReport, item.client_id)
+        if exists is not None:
+            synced.append(item.client_id)
+            continue
+        dup = await _find_duplicate(db, item.lat, item.lon, item.category)
+        if dup is not None:
+            dup.dup_count += 1
+            merged += 1
+            synced.append(item.client_id)
+            continue
+        flagged_flag = item.exif_geo_ok is False
+        flagged += int(flagged_flag)
+        out = await _upsert_report(db, item, user, sync_batch=batch.batch_id)
         accepted += 1
-        DEMO_REPORTS.insert(0, ReportOut(
-            id=item.client_id,
-            author_id=user.id,
-            role=user.role.value if hasattr(user.role, 'value') else str(user.role),
-            category=item.category,
-            description=item.description or f"Field report ({item.category}) submitted via mobile app.",
-            status="pending",
-            dup_count=0,
-            exif_geo_ok=True,
-            taken_at=datetime.now(timezone.utc),
-            created_at=datetime.now(timezone.utc),
-            lat=float(item.lat),
-            lon=float(item.lon),
-        ))
-        if db is not None:
-            try:
-                await _upsert_report(db, item, user, sync_batch=batch.batch_id)
-            except Exception:
-                pass
-    if db is not None:
-        try:
-            await db.commit()
-        except Exception:
-            pass
+        synced.append(item.client_id)
+        # AI-Inbox demo mirror: only when the DB row really is new, and only
+        # once per id so replays never grow the mirror.
+        if not any(r.id == out.id for r in DEMO_REPORTS):
+            DEMO_REPORTS.insert(0, out)
     return SyncBatchOut(
         batch_id=batch.batch_id,
         accepted=accepted,
