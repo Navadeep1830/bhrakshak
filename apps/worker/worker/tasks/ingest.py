@@ -91,7 +91,7 @@ async def _poll_all() -> int:
             district, data = item
             data_by_district[district] = data
 
-        for district, _n, _lat, _lon, any_zone_id in zone_rows:
+        for district, _n, _lat, _lon in zone_rows:
             data = data_by_district.get(district)
             hourly: list[float]
             soil: list[float] | None = None
