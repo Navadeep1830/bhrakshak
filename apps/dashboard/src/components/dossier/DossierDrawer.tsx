@@ -3,7 +3,7 @@
 import ReactECharts from "echarts-for-react";
 import { useEffect, useState } from "react";
 
-import { apiGet, FIXTURE_DRIVERS, FIXTURE_RAINFALL } from "@/lib/api";
+import { apiGet, endpoints, FIXTURE_DRIVERS, FIXTURE_RAINFALL } from "@/lib/api";
 import { LEVEL_COLORS, LEVEL_NAMES } from "@/lib/utils";
 import type { Dossier } from "@/lib/types";
 import { useAppStore } from "@/store/useAppStore";
@@ -79,7 +79,7 @@ export function DossierDrawer() {
               onClick={async () => {
                 if (!zoneId) return;
                 try {
-                  const res = await fetch(`/api/v1/analytics/briefing-dossier/${zoneId}?format=markdown`);
+                  const res = await fetch(`${endpoints.API}/api/v1/analytics/briefing-dossier/${zoneId}?format=markdown`);
                   const text = await res.text();
                   await navigator.clipboard.writeText(text);
                   alert("Copied Official DDMA Briefing Dossier Markdown to clipboard ✓");
@@ -92,7 +92,7 @@ export function DossierDrawer() {
               📋 Copy MD
             </button>
             <a
-              href={`/api/v1/analytics/briefing-dossier/${zoneId}?format=markdown`}
+              href={`${endpoints.API}/api/v1/analytics/briefing-dossier/${zoneId}?format=markdown`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 rounded border border-amber-500/40 bg-amber-950/40 px-2 py-1 text-[10px] font-bold text-amber-300 transition-colors hover:bg-amber-900/60 hover:text-white"

@@ -9,7 +9,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api.v1 import alerts, analytics, auth, ble, briefing, demo, evacuation, incident_command, ingest, logistics, mesh, public, reports, roads, ws, zones
+from app.api.v1 import alerts, analytics, auth, ble, briefing, chat, demo, evacuation, incident_command, ingest, logistics, mesh, public, reports, roads, ws, zones
 from app.core.config import settings
 
 
@@ -60,9 +60,17 @@ app.add_middleware(
 
 for r in (auth.router, zones.router, reports.router, alerts.router, roads.router,
           demo.router, analytics.router, briefing.router, ingest.router, logistics.router,
-          incident_command.router, evacuation.router, ble.router, mesh.router, public.router):
+          incident_command.router, evacuation.router, ble.router, mesh.router, public.router, chat.router):
     app.include_router(r, prefix="/api/v1")
 app.include_router(ws.router)  # websocket at /ws/live
+
+
+from fastapi.responses import FileResponse, JSONResponse
+
+@app.get("/download/apk", tags=["ops"])
+async def download_apk():
+    apk_path = "/home/sudpy/Landslide Proto/bhrakshak/bhrakshak-field-latest.apk"
+    return FileResponse(apk_path, media_type="application/vnd.android.package-archive", filename="bhrakshak-field-latest.apk")
 
 
 @app.get("/health", tags=["ops"])

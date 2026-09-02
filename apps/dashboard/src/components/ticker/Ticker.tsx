@@ -5,7 +5,15 @@ import { useEffect, useRef, useState } from "react";
 import { LEVEL_COLORS } from "@/lib/utils";
 import type { TickerEvent } from "@/lib/types";
 
-const WS_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace("http", "ws");
+function getWsUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace("http", "ws");
+  }
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    return "wss://bhrakshak-api-demo.loca.lt";
+  }
+  return "ws://localhost:8000";
+}
 
 export function Ticker() {
   const [events, setEvents] = useState<TickerEvent[]>([]);
@@ -16,7 +24,8 @@ export function Ticker() {
     let retry: ReturnType<typeof setTimeout>;
     const connect = () => {
       try {
-        const ws = new WebSocket(`${WS_URL}/ws/live`);
+        const wsUrl = getWsUrl();
+        const ws = new WebSocket(`${wsUrl}/ws/live`);
         wsRef.current = ws;
         ws.onmessage = (m) => {
           try {

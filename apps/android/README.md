@@ -49,7 +49,7 @@ are pinned; JDK 17 required. `gradle.properties` enables AndroidX.
 
 Backend URL defaults to the public cloud tunnel:
 ```text
-https://weak-guests-rule.loca.lt
+https://bhrakshak-api-demo.loca.lt
 ```
 
 You can repoint to a custom LAN IP (e.g. `http://10.68.3.168:8000`) or production domain directly on the login screen.

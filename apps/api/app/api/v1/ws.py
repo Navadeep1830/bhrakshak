@@ -9,9 +9,28 @@ from app.core.config import settings
 router = APIRouter(tags=["ws"])
 
 
+active_sockets: set[WebSocket] = set()
+
+
+async def broadcast_event(data: dict):
+    msg_str = json.dumps(data)
+    try:
+        r = aioredis.from_url(settings.redis_url)
+        await r.publish("bhrakshak:live", msg_str)
+        await r.aclose()
+    except Exception:
+        pass
+    for ws in list(active_sockets):
+        try:
+            await ws.send_text(msg_str)
+        except Exception:
+            active_sockets.discard(ws)
+
+
 @router.websocket("/ws/live")
 async def ws_live(ws: WebSocket):
     await ws.accept()
+    active_sockets.add(ws)
     pubsub = None
     try:
         r = aioredis.from_url(settings.redis_url)
@@ -28,6 +47,7 @@ async def ws_live(ws: WebSocket):
     except Exception:
         pass
     finally:
+        active_sockets.discard(ws)
         if pubsub:
             try:
                 await pubsub.unsubscribe("bhrakshak:live")

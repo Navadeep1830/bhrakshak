@@ -1,0 +1,18 @@
+{
+  "name": "hazard_nowcast",
+  "version": "v0-synthetic-temporal-split",
+  "git_sha": "cf37615",
+  "metrics": {
+    "split": {
+      "train": "<=2019",
+      "val": "2020-2022",
+      "test": "2023-2024"
+    },
+    "test_auc": 0.848,
+    "test_brier": 0.1388,
+    "calibration": "isotonic",
+    "fusion_rule": "level = max(threshold_tier, calibrated_ml_tier)"
+  },
+  "notes": "SYNTHETIC zone-days until inventory+ERA5 join lands",
+  "trained_at": "2026-09-02T15:18:48.824125+00:00"
+}
