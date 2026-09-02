@@ -1,11 +1,27 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const MARTIN = process.env.NEXT_PUBLIC_MARTIN_URL ?? "http://localhost:3001";
+function getApiUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    return "https://bhrakshak-api-demo.loca.lt";
+  }
+  return "http://localhost:8000";
+}
 
-export const endpoints = { API, MARTIN };
+export const endpoints = {
+  get API() {
+    return getApiUrl();
+  },
+  MARTIN: process.env.NEXT_PUBLIC_MARTIN_URL ?? "http://localhost:3001",
+};
 
 export async function apiGet<T>(path: string, token?: string): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  const baseUrl = getApiUrl();
+  const headers: Record<string, string> = {
+    "Bypass-Tunnel-Remainder": "true",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${baseUrl}${path}`, {
+    headers,
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`API ${res.status} on ${path}`);
