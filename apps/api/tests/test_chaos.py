@@ -1,4 +1,4 @@
-"""test_chaos.py - Platform Chaos & Disaster Resilience Tests
+﻿"""test_chaos.py - Platform Chaos & Disaster Resilience Tests
 SIH26001: Verifies platform resilience under cellular blackouts, database connection dropouts,
 high alert broadcast storms, and corrupted LoRa sensor telemetry.
 """
@@ -114,4 +114,8 @@ if __name__ == "__main__":
     asyncio.run(test_chaos_database_dropout_health_endpoint())
     test_chaos_alert_storm_multilingual_broadcast()
     test_chaos_corrupted_sensor_telemetry_resilience()
-    print("✅ All platform chaos and disaster resilience tests passed successfully.")
+    print("âœ… All platform chaos and disaster resilience tests passed successfully.")
+
+
+
+

@@ -1,4 +1,4 @@
-"""test_logistics.py - Automated Tests for Shelter Optimization & Evacuation Logistics
+﻿"""test_logistics.py - Automated Tests for Shelter Optimization & Evacuation Logistics
 SIH26001: Verifies shelter capacity allocation, food/water logistics, and convoy dispatch.
 """
 
@@ -61,4 +61,8 @@ if __name__ == "__main__":
     test_shelter_allocation_multi_camp_overflow()
     test_nh29_kohima_shelter_allocation()
     test_nh102_moreh_shelter_allocation()
-    print("✅ All shelter capacity optimization and logistics tests passed successfully.")
+    print("âœ… All shelter capacity optimization and logistics tests passed successfully.")
+
+
+
+

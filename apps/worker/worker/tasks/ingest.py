@@ -125,7 +125,12 @@ async def _poll_all() -> int:
                         rain_72h=r72,
                         rain_7d=r72,
                         eff_rain=eff,
-                        soil_moisture=sm,
+                        # Open-Meteo serves volumetric water content (m3/m3,
+                        # e.g. 0.386); the whole API + geotech read PERCENT
+                        # (38.6). Same 100x conversion ml/ingest/weather.py
+                        # does at its boundary — the worker must agree or
+                        # FoS and the soil-moisture driver read nonsense.
+                        soil_moisture=(float(sm) * 100.0) if (sm is not None and float(sm) <= 1.0) else sm,
                     )
                 )
                 written += 1

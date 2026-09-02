@@ -1,4 +1,4 @@
-"""test_tupul_simulation.py - Automated Tests for June 2022 Tupul Disaster Replay Simulation
+﻿"""test_tupul_simulation.py - Automated Tests for June 2022 Tupul Disaster Replay Simulation
 SIH26001: Verifies 144-step 15-minute time stepping, FoS degradation, and >=36h early warning lead time.
 """
 
@@ -52,4 +52,8 @@ if __name__ == "__main__":
     test_tupul_timeline_step_count_and_continuity()
     test_tupul_36h_early_warning_lead_time()
     test_tupul_geotechnical_failure_progression()
-    print("✅ All Tupul disaster simulation automated tests passed successfully.")
+    print("âœ… All Tupul disaster simulation automated tests passed successfully.")
+
+
+
+

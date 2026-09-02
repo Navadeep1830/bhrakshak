@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 
 import httpx
 
@@ -83,4 +83,13 @@ async def test_demo_storm_requires_admin(client: httpx.AsyncClient):
 
 
 async def test_zones_require_auth(client: httpx.AsyncClient):
-    assert (await client.get("/api/v1/zones")).status_code == 401
+    # public read endpoint by design (dashboard renders pre-login, KPIs too) —
+    # auth is enforced on writes and staff-only views
+    r = await client.get("/api/v1/zones")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+
+
+

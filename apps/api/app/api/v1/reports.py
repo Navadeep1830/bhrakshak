@@ -136,6 +136,60 @@ async def list_reports(status_filter: str | None = "pending", limit: int = 100,
     return outs
 
 
+@router.post("/analyze-photo", status_code=200)
+async def analyze_photo(
+    lat: float | None = None,
+    lon: float | None = None,
+    taken_at: str | None = None,
+    photo: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Model V — "is there a landslide in this photo?"
+
+    EXIF GPS + capture time are read from the image itself and cross-checked
+    against the claimed coordinates (>300 m = provenance flag). The pixel
+    signature (fresh-soil fraction, scarp edge energy, vegetation cover) maps
+    to P(landslide visible) with a POSITIVE / POSSIBLE / NEGATIVE verdict.
+
+    The PWA calls this BEFORE queueing the report so the operator sees the
+    AI pre-screen attached to the queue entry; the verdict is persisted on
+    the report's ai_analysis when the report is later synced with the same
+    media.
+    """
+    import uuid as _uuid
+
+    from app.services.geoverify import classify_photo
+
+    data = await photo.read()
+    if not data:
+        raise HTTPException(422, "empty upload")
+    if len(data) > 12 * 1024 * 1024:
+        raise HTTPException(413, "photo exceeds 12MB")
+
+    res = classify_photo(data, claimed_lat=lat, claimed_lon=lon, claimed_time=taken_at)
+    out = res.as_dict()
+
+    # Attach the AI verdict to the report if the client already created one
+    # with this photo's hash in media_refs (PWA computes sha1 as media key).
+    import hashlib
+
+    media_key = f"sha1:{hashlib.sha1(data).hexdigest()}"
+    row = (
+        await db.execute(
+            select(CitizenReport).where(CitizenReport.media_refs.any(media_key)).order_by(
+                CitizenReport.created_at.desc()
+            ).limit(1)
+        )
+    ).scalar_one_or_none()
+    if row is not None:
+        row.ai_analysis = out
+        await db.commit()
+
+    out["media_key"] = media_key
+    return out
+
+
 @router.patch("/{report_id}/verify", response_model=ReportOut)
 async def verify_report(
     report_id: uuid.UUID,

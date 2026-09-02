@@ -1,4 +1,4 @@
-import math
+﻿import math
 import sys
 from pathlib import Path
 import pytest
@@ -132,4 +132,8 @@ if __name__ == "__main__":
     test_infinite_slope_stability_kinematic_diagnostics()
     test_factor_of_safety_seismic_pseudo_static_loading()
     test_factor_of_safety_transient_seepage_ratio()
-    print("✅ All geotechnical physics and InSAR kinematic tests passed successfully.")
+    print("âœ… All geotechnical physics and InSAR kinematic tests passed successfully.")
+
+
+
+

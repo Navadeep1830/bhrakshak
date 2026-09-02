@@ -129,6 +129,47 @@ async def get_zone_briefing_dossier(zone_id: str, format: str = "json", db: Asyn
     return dossier
 
 
+@router.get("/population-heatmap")
+async def population_heatmap(district: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Population-at-risk heatmap: hex centroids weighted by exposure.
+
+    intensity = population x (1 + hazard_level^1.5) so a crowded calm zone
+    still shows, but a crowded RED zone dominates — this is the layer the
+    response prioritisation queue is built on.
+    """
+    q = select(
+        Zone.zone_code, Zone.name, Zone.district, Zone.population,
+        RiskCell.hazard_level, RiskCell.prob_24h,
+        func.ST_Y(func.ST_Centroid(Zone.geom)).label("lat"),
+        func.ST_X(func.ST_Centroid(Zone.geom)).label("lon"),
+    ).join(RiskCell, RiskCell.zone_id == Zone.id, isouter=True)
+    if district:
+        q = q.where(Zone.district == district)
+    rows = (await db.execute(q)).all()
+    feats = []
+    for code, name, dist, pop, lvl, prob, lat, lon in rows:
+        lvl_i = int(lvl or 0)
+        pop_i = int(pop or 0)
+        intensity = pop_i * (1 + lvl_i ** 1.5)
+        feats.append({
+            "type": "Feature",
+            "properties": {
+                "zone_code": code, "name": name, "district": dist,
+                "population": pop_i, "hazard_level": lvl_i,
+                "prob_24h": prob,
+                "intensity": round(intensity),
+                "exposed_population": pop_i if lvl_i >= 2 else 0,
+            },
+            "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
+        })
+    return {
+        "type": "FeatureCollection",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "n_zones": len(feats),
+        "features": feats,
+    }
+
+
 class DebrisRunoutRequestIn(BaseModel):
     initial_volume_m3: float = 1_200_000.0
     scarp_elevation_m: float = 850.0

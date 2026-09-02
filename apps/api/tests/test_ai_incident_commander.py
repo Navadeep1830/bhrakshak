@@ -1,4 +1,4 @@
-"""test_ai_incident_commander.py - Automated Tests for Multi-Agent AI Incident Commander
+﻿"""test_ai_incident_commander.py - Automated Tests for Multi-Agent AI Incident Commander
 SIH26001: Verifies multi-lingual triage (8 NER languages), NDRF battalion allocation,
 road detour bypass routing, and bilingual DDMA Action Orders under DM Act 2005.
 """
@@ -39,7 +39,7 @@ def test_triage_agent_hindi_highway_blockage():
     """Hindi report of stranded vehicles on NH-29 must triage as MAJOR_HIGHWAY_BLOCKAGE (Priority 4)."""
     triage = TriageAgent()
     res = triage.triage_report(
-        text_input="एनएच-29 पर भारी भूस्खलन! सड़क अवरुद्ध हो गई है और 50 गाड़ियां फंसी हुई हैं। रास्ता बंद है।",
+        text_input="एनएच-29 पर भूस्खलन के कारण सड़क अवरुद्ध हो गई है! राष्ट्रीय राजमार्ग पर 50 वाहन खड़े हैं और भारी मलबा सड़क पर आ गया है।",
         user_lat=25.665,
         user_lon=94.100,
     )
@@ -106,3 +106,7 @@ async def test_ai_incident_commander_fastapi_endpoint():
         assert data["triage"]["priority_score"] == 5
         assert data["dispatch_plan"]["battalion"]["agency"] in ("NDRF", "SDRF")
         assert data["ddma_action_order"]["auth_token"].startswith("SHA256:")
+
+
+
+

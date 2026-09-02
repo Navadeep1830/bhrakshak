@@ -1,4 +1,4 @@
-"""test_field_pwa_reports.py - Automated Tests for Field PWA Offline Reports & 8 NER Languages
+﻿"""test_field_pwa_reports.py - Automated Tests for Field PWA Offline Reports & 8 NER Languages
 SIH26001: Verifies multi-lingual templates, image attachment payloads, and spatial deduplication.
 """
 
@@ -96,4 +96,8 @@ if __name__ == "__main__":
     test_8_ner_languages_alert_templates_full_matrix()
     test_field_pwa_sync_payload_with_photos()
     test_spatial_proximity_deduplication()
-    print("✅ All Field PWA offline reports & 8 NER language tests passed successfully.")
+    print("âœ… All Field PWA offline reports & 8 NER language tests passed successfully.")
+
+
+
+

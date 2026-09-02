@@ -265,9 +265,83 @@ async def create_supply_dispatch(payload: DispatchCreateIn) -> dict[str, Any]:
     return {"status": "success", "dispatch_id": new_id, "dispatch": dispatch_entry}
 
 
+TEAM_MESSAGES: list[dict[str, Any]] = []
+
+
+class TeamMessageIn(BaseModel):
+    team_id: str  # "ALL" broadcasts to every deployed team
+    text: str
+    priority: Literal["ROUTINE", "PRIORITY", "FLASH"] = "PRIORITY"
+    from_station: str = "DDMA Control Room"
+
+
+class TeamCheckinIn(BaseModel):
+    team_id: str
+    lat: float
+    lon: float
+    status: Literal["STANDBY", "EN_ROUTE", "ON_SITE", "RECOVERY_OPS"]
+    note: str | None = None
+
+
+@router.post("/teams/message")
+async def send_team_message(payload: TeamMessageIn) -> dict[str, Any]:
+    """NDRF/SDRF operational message: pushed live over the WebSocket channel
+    (/ws/live, type=ndrf_message) so every ops screen and the Android app
+    receive it in real time; archived for the incident log."""
+    targets = (
+        ACTIVE_TEAMS if payload.team_id == "ALL"
+        else [t for t in ACTIVE_TEAMS if t["team_id"] == payload.team_id]
+    )
+    if not targets:
+        raise HTTPException(404, f"team {payload.team_id} not found")
+
+    msg = {
+        "message_id": f"MSG-{uuid.uuid4().hex[:8].upper()}",
+        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "from_station": payload.from_station,
+        "priority": payload.priority,
+        "text": payload.text,
+        "audience": [t["team_id"] for t in targets],
+    }
+    TEAM_MESSAGES.append(msg)
+    try:
+        from app.services.risk_engine import publish_live
+
+        await publish_live("ndrf_message", msg)
+    except Exception:
+        pass
+    return {"status": "sent", "recipients": len(targets), "message": msg}
+
+
+@router.get("/teams/messages")
+async def list_team_messages(limit: int = 50) -> list[dict[str, Any]]:
+    return TEAM_MESSAGES[-limit:][::-1]
+
+
+@router.post("/teams/checkin")
+async def team_checkin(payload: TeamCheckinIn) -> dict[str, Any]:
+    """Position + status check-in from the field (Android app / sat terminal)."""
+    for team in ACTIVE_TEAMS:
+        if team["team_id"] == payload.team_id:
+            team["lat"], team["lon"] = payload.lat, payload.lon
+            team["status"] = payload.status
+            team["last_checkin"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            if payload.note:
+                team.setdefault("checkin_notes", []).append(
+                    {"ts": team["last_checkin"], "note": payload.note}
+                )
+            try:
+                from app.services.risk_engine import publish_live
+
+                await publish_live("ndrf_checkin", {"team_id": team["team_id"], "status": payload.status, "lat": payload.lat, "lon": payload.lon})
+            except Exception:
+                pass
+            return {"status": "ok", "team": team}
+    raise HTTPException(404, f"team {payload.team_id} not found")
+
+
 @router.get("/summary")
 async def get_incident_command_summary() -> dict[str, Any]:
-    """Aggregates high-level Incident Command metrics for District Collector & DDMA briefings."""
     total_capacity = sum(s["max_capacity"] for s in RELIEF_SHELTERS)
     total_evacuees = sum(s["current_occupancy"] for s in RELIEF_SHELTERS)
     available_beds = sum(s["available_beds"] for s in RELIEF_SHELTERS)

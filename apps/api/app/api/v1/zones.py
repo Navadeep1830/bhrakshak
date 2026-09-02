@@ -77,6 +77,79 @@ async def list_zones(
     return outs
 
 
+@router.get("/{zone_id}/weather")
+async def zone_weather(zone_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Rain-gauge panel for the PWA/dashboard: live accumulations, soil
+    moisture, Kohler-Linsley antecedent index, and I-D threshold breach status.
+
+    Reads ONLY measured rainfall_obs rows — no synthetic interpolation, no
+    external calls, so it answers instantly and works offline (last known
+    values are what a rain gauge actually shows when the link drops).
+    """
+    from app.services.geotech import check_rainfall_id_exceedance
+
+    zone = await db.get(Zone, zone_id)
+    if zone is None:
+        raise HTTPException(404, "Zone not found")
+    since = datetime.now(timezone.utc) - timedelta(hours=72)
+    rows = (
+        await db.execute(
+            select(RainfallObs)
+            .where(RainfallObs.zone_id == zone.id, RainfallObs.ts >= since)
+            .order_by(RainfallObs.ts)
+        )
+    ).scalars().all()
+    if not rows:
+        return {
+            "zone_code": zone.zone_code,
+            "district": zone.district,
+            "has_data": False,
+            "note": "no rainfall observations in the last 72h",
+        }
+    latest = rows[-1]
+    series = [
+        {
+            "ts": r.ts.isoformat(),
+            "rain_1h": r.rain_1h,
+            "rain_24h": r.rain_24h,
+            "rain_72h": r.rain_72h,
+            "eff_rain": r.eff_rain,
+            "soil_moisture": r.soil_moisture,
+        }
+        for r in rows
+    ]
+    id_check = None
+    if latest.rain_1h is not None and latest.rain_24h is not None:
+        id_check = check_rainfall_id_exceedance(
+            float(latest.rain_1h), float(latest.rain_24h),
+            float(latest.rain_72h) if latest.rain_72h is not None else None,
+        )
+    # gauge-style summary: the numbers a physical rain meter would show
+    rain_1h_ago = rows[-2].rain_1h if len(rows) > 1 else None
+    trend = None
+    if latest.rain_1h is not None and rain_1h_ago is not None:
+        trend = "rising" if latest.rain_1h > rain_1h_ago else ("falling" if latest.rain_1h < rain_1h_ago else "steady")
+    return {
+        "zone_code": zone.zone_code,
+        "district": zone.district,
+        "has_data": True,
+        "current": {
+            "ts": latest.ts.isoformat(),
+            "rain_1h_mm": latest.rain_1h,
+            "rain_24h_mm": latest.rain_24h,
+            "rain_48h_mm": latest.rain_48h,
+            "rain_72h_mm": latest.rain_72h,
+            "rain_7d_mm": latest.rain_7d,
+            "eff_rain_mm": latest.eff_rain,
+            "soil_moisture_pct": latest.soil_moisture,
+            "trend": trend,
+        },
+        "id_threshold_check": id_check,
+        "series": series,
+        "n_points": len(series),
+    }
+
+
 @router.get("/{zone_id}/dossier", response_model=ZoneDossier)
 async def zone_dossier(zone_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     zone = await db.get(Zone, zone_id)

@@ -13,6 +13,14 @@ celery_app.conf.update(
     timezone="Asia/Kolkata",
     enable_utc=True,
     task_track_started=True,
+    # Kombu defaults the message routing key to "celery" but the worker was
+    # started with -Q default,tiles, so every .delay() landed in a queue
+    # nothing consumed -- beat tasks silently piled up in redis (62 stuck
+    # messages) and no scheduled ingest ever ran. Pin the default queue so
+    # producer and consumer agree.
+    task_default_queue="default",
+    task_default_exchange="default",
+    task_default_routing_key="default",
     beat_schedule={
         "poll-rainfall-15min": {"task": "tasks.poll_rainfall", "schedule": 15 * 60},
         "recompute-risk-15min": {"task": "tasks.recompute_risk", "schedule": 15 * 60,

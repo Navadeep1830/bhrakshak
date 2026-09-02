@@ -50,6 +50,24 @@ async def engine():
     eng = create_async_engine(TEST_DB_URL)
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Seed the auth users the API tests log in as. The suite runs against a
+    # dedicated test database that starts empty — without these rows every
+    # login fails with 401 and half the suite is collateral damage.
+    from sqlalchemy import select
+
+    from app.core.security import hash_password
+    from app.models import Role, User
+
+    Session = async_sessionmaker(eng, expire_on_commit=False)
+    async with Session() as s:
+        for email, name, role, pw in (
+            ("admin@bhrakshak.in", "Platform Admin", Role.admin, "Admin@123"),
+            ("citizen@bhrakshak.in", "Demo Citizen", Role.citizen, "Citizen@123"),
+        ):
+            exists = (await s.execute(select(User).where(User.email == email))).scalar_one_or_none()
+            if not exists:
+                s.add(User(email=email, full_name=name, role=role, hashed_password=hash_password(pw)))
+        await s.commit()
     yield eng
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

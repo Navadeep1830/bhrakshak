@@ -1,4 +1,4 @@
-"""test_debris_runout.py - Automated Tests for Voellmy-Salm Shallow-Water Debris Hydrodynamics
+﻿"""test_debris_runout.py - Automated Tests for Voellmy-Salm Shallow-Water Debris Hydrodynamics
 SIH26001: Verifies debris flow runout velocity, inundation depth, kinetic impact pressure,
 and downstream settlement vulnerability modeling with zero cloud APIs.
 """
@@ -88,3 +88,7 @@ async def test_debris_runout_fastapi_endpoint():
         assert len(data["settlement_impacts"]) >= 3
         assert len(data["profile_summary_sample"]) > 5
         assert "Voellmy-Salm" in data["computational_engine"]
+
+
+
+

@@ -1,4 +1,4 @@
-"""test_model_contract.py - Model B bundle provenance + feature contract.
+﻿"""test_model_contract.py - Model B bundle provenance + feature contract.
 
 The API used to serve whatever `ml_models/model_b_nowcast.pkl` happened to be
 on disk. The version in the repo was `v1.0-autoresearch-champion`: trained by
@@ -159,7 +159,7 @@ def test_missing_features_fall_back_instead_of_being_invented(monkeypatch):
     zone = Zone(id=None, zone_code="T", susc_mean=50.0, susc_p90=60.0)
 
     # No observation row -> rain_7d genuinely unmeasured.
-    prob, drivers = re.predict_model_b(
+    prob, drivers, _raw = re.predict_model_b(
         rain_1h=5.0, rain_24h=100.0, soil_moisture=None, zone=zone
     )
     # predict_model_b rounds to 4dp for storage, so compare with that tolerance.
@@ -170,7 +170,7 @@ def test_missing_features_fall_back_instead_of_being_invented(monkeypatch):
     class Obs:
         rain_7d = 300.0
 
-    prob2, drivers2 = re.predict_model_b(
+    prob2, drivers2, _raw2 = re.predict_model_b(
         rain_1h=5.0, rain_24h=100.0, soil_moisture=None, zone=zone, antecedent=Obs()
     )
     assert prob2 == pytest.approx(0.65)  # 0.5*0.7 + 0.5*0.6
@@ -182,10 +182,10 @@ def test_insar_driver_absent_unless_measured():
     from app.models import Zone
 
     zone = Zone(id=None, zone_code="T", susc_mean=80.0, susc_p90=90.0)
-    _, without = re.predict_model_b(1.0, 10.0, None, zone)
+    _, without, _raw3 = re.predict_model_b(1.0, 10.0, None, zone)
     assert not any("InSAR" in d["feature"] for d in without)
 
-    _, with_insar = re.predict_model_b(
+    _, with_insar, _raw5 = re.predict_model_b(
         1.0, 10.0, None, zone, insar_velocity_mm_yr=-12.0
     )
     assert any("InSAR" in d["feature"] for d in with_insar)
@@ -196,8 +196,14 @@ def test_unmeasured_soil_is_not_defaulted():
     from app.models import Zone
 
     zone = Zone(id=None, zone_code="T", susc_mean=50.0, susc_p90=60.0)
-    _, drivers = re.predict_model_b(1.0, 10.0, None, zone)
+    _, drivers, _raw4 = re.predict_model_b(1.0, 10.0, None, zone)
     soil = next(d for d in drivers if d["feature"] == "Soil Saturation")
     assert soil["missing"] is True
     assert soil["value"] == "n/a"
     assert soil["val_num"] is None
+
+
+
+
+
+

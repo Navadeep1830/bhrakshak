@@ -1,4 +1,4 @@
-"""test_lorawan_simulation.py - Automated Tests for Virtual LoRaWAN ESP32 Edge Sensor Simulation
+﻿"""test_lorawan_simulation.py - Automated Tests for Virtual LoRaWAN ESP32 Edge Sensor Simulation
 SIH26001: Verifies telemetry payload structures, physical FoS calculation, and edge anomaly detection.
 """
 
@@ -49,4 +49,8 @@ if __name__ == "__main__":
     test_lorawan_fleet_initialization()
     test_lorawan_baseline_telemetry_generation()
     test_lorawan_storm_surge_anomaly_detection()
-    print("✅ All LoRaWAN edge sensor simulation tests passed successfully.")
+    print("âœ… All LoRaWAN edge sensor simulation tests passed successfully.")
+
+
+
+

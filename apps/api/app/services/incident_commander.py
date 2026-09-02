@@ -30,8 +30,8 @@ KEYWORD_TAXONOMY = {
         "mni-Mtei": ["ꯐꯥꯖꯤꯟꯕ", "ꯂꯩꯔꯝꯕ", "ꯑꯁꯣꯛ-ꯑꯄꯟ", "ꯌꯨꯝ ꯇꯨꯈ꯭ꯔꯦ", "ꯃꯇꯦꯡ"],
     },
     "MAJOR_HIGHWAY_BLOCKAGE": {
-        "en": ["highway blocked", "nh-29", "nh-102", "road cut", "vehicles stranded", "boulder on road", "landslide block"],
-        "hi": ["राजमार्ग बंद", "सड़क अवरुद्ध", "गाड़ियां फंसी", "रास्ता बंद", "मलबा"],
+        "en": ["NH-29", "NH-102", "NH-6", "highway blocked", "nh-29", "nh-102", "road cut", "vehicles stranded", "boulder on road", "landslide block"],
+        "hi": ["सड़क अवरुद्ध", "मार्ग बंद", "राष्ट्रीय राजमार्ग", "जमा हुए वाहन", "मलबा सड़क", "NH-29", "NH-102", "NH-6"],
         "bn": ["হাইওয়ে বন্ধ", "রাস্তা অবরুদ্ধ", "যানবাহন আটকে"],
         "as": ["ৰাজপথ বন্ধ", "পথ অৱৰুদ্ধ", "গাড়ী আবদ্ধ"],
         "ne": ["राजमार्ग बन्द", "बाटो बन्द", "गाडी रोकियो"],

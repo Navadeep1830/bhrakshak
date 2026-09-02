@@ -12,7 +12,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, utcnow
@@ -35,6 +35,37 @@ class CitizenReport(Base):
     exif_geo_ok: Mapped[bool | None] = mapped_column(Boolean)  # EXIF GPS vs claimed coords < 500m
     dup_count: Mapped[int] = mapped_column(Integer, default=0)  # proximity dedupe merges
     risk_contribution: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Model V (geo-verified photo AI) output — written by POST /reports/analyze-photo
+    ai_analysis: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class Shelter(Base):
+    """Designated relief/evacuation shelter — target of the pathway model.
+
+    "Safe" is a column, not a vibe: a shelter is safe when it is far from
+    high-susceptibility terrain, sits on gentle ground, and has capacity. The
+    evacuation router (services/evacuation.py) scores candidate shelters on
+    exactly these fields.
+    """
+
+    __tablename__ = "shelters"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(160))
+    district: Mapped[str | None] = mapped_column(String(120), index=True)
+    geom: Mapped[object] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
+    capacity: Mapped[int] = mapped_column(Integer, default=200)
+    occupancy: Mapped[int] = mapped_column(Integer, default=0)
+    shelter_type: Mapped[str] = mapped_column(String(40), default="community_hall")  # school|stadium|hall|hospital|stadium
+    has_medical: Mapped[bool] = mapped_column(Boolean, default=False)
+    water_liters: Mapped[int] = mapped_column(Integer, default=0)
+    ration_packets: Mapped[int] = mapped_column(Integer, default=0)
+    # terrain safety attributes of the shelter site itself
+    elevation_m: Mapped[float | None] = mapped_column(Float)
+    slope_deg: Mapped[float | None] = mapped_column(Float)  # gentler = safer
+    distance_to_steep_slope_m: Mapped[float | None] = mapped_column(Float)  # farther = safer
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
