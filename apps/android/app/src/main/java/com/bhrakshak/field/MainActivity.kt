@@ -252,9 +252,10 @@ class MainActivity : AppCompatActivity() {
         root.addView(label("Logged in as $email"))
         runCatching { LiveAlertService.start(this) }
 
-        val riskNow = mono("", 16f)
+        val riskNow = mono("📍 Fetching live risk at location...", 16f)
         root.addView(riskNow)
-        root.addView(button("Refresh risk at my location", 0xFF1E293B.toInt()) { refreshRisk(riskNow) })
+        refreshRisk(riskNow)
+
         root.addView(button("I'M SAFE — check in", 0xFF059669.toInt()) { safeCheckin() })
         root.addView(button("SAFEST ROUTE (pathway model)", 0xFF0284C7.toInt()) { showSafeRoute() })
         root.addView(button("RAIN GAUGE (nearest zone)", 0xFF7C3AED.toInt()) { showRainGauge() })
