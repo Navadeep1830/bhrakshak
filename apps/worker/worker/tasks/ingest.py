@@ -47,43 +47,53 @@ def _synthetic_hourly(n: int = 168) -> list[float]:
 async def _poll_all() -> int:
     from geoalchemy2 import functions as gfunc
 
+    from sqlalchemy import func
+
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     written = 0
 
     async with fresh_sessionmaker()() as db:
+        # One fetch per DISTRICT, not per zone: 536 zone-level requests every
+        # tick blew through Open-Meteo's free tier (HTTP 429 across the fleet,
+        # zero live rainfall). District centroids are ~8 requests; every zone
+        # in the district shares its gauge. Zone-heterogeneity inside a
+        # district is far smaller than the gap between "no data" and "data".
         zone_rows = (
             await db.execute(
                 select(
-                    Zone,
-                    gfunc.ST_Y(gfunc.ST_Centroid(Zone.geom)),
-                    gfunc.ST_X(gfunc.ST_Centroid(Zone.geom)),
+                    Zone.district,
+                    func.count().label("n_zones"),
+                    func.avg(gfunc.ST_Y(gfunc.ST_Centroid(Zone.geom))).label("lat"),
+                    func.avg(gfunc.ST_X(gfunc.ST_Centroid(Zone.geom))).label("lon"),
+                    func.min(Zone.id).label("zone_id"),
                 )
+                .group_by(Zone.district)
             )
         ).all()
 
-        # Parallel fetch, bounded: 536 zones serially at up to 15 s timeout
-        # each can take 20+ minutes and the beat schedule moves on. A
-        # semaphore of 8 stays far under Open-Meteo's free-tier rate limit
-        # (~600 req/min) while finishing the whole fleet in ~1-2 minutes.
-        sem = asyncio.Semaphore(8)
+        sem = asyncio.Semaphore(4)
 
-        async def _fetch_for(z, lat_f, lon_f):
+        async def _fetch_for(district, lat_f, lon_f):
             async with sem:
                 if lat_f is None or lon_f is None:
-                    return z, None
-                return z, await _fetch_open_meteo(lat_f, lon_f)
+                    return district, None
+                return district, await _fetch_open_meteo(float(lat_f), float(lon_f))
 
         results = await asyncio.gather(
-            *(_fetch_for(z, float(lat) if lat is not None else None, float(lon) if lon is not None else None) for z, lat, lon in zone_rows),
+            *(_fetch_for(d, lat, lon) for d, _n, lat, lon, _z in zone_rows),
             return_exceptions=True,
         )
 
+        data_by_district: dict = {}
         for item in results:
             if isinstance(item, Exception):
-                log.warning("zone fetch task failed: %s", item)
+                log.warning("district fetch task failed: %s", item)
                 continue
-            z, data = item
+            district, data = item
+            data_by_district[district] = data
 
+        for district, _n, _lat, _lon, any_zone_id in zone_rows:
+            data = data_by_district.get(district)
             hourly: list[float]
             soil: list[float] | None = None
             if data and "hourly" in data:
@@ -99,43 +109,59 @@ async def _poll_all() -> int:
             if not hourly:
                 continue
 
+            # all zones of this district share the district gauge
+            zone_ids = (
+                await db.execute(select(Zone.id).where(Zone.district == district))
+            ).scalars().all()
+            if not zone_ids:
+                continue
+
             tail = hourly[-72:]
-            for i, mm in enumerate(tail):
-                ts = now - timedelta(hours=len(tail) - 1 - i)
-                idx = i
-                r24 = round(sum(tail[max(0, idx - 23): idx + 1]), 2)
-                r48 = round(sum(tail[max(0, idx - 47): idx + 1]), 2)
-                r72 = round(sum(tail), 2)
-                eff = round(sum(m * (0.5 ** (k / 48)) for k, m in enumerate(reversed(tail[: idx + 1]))), 2)
-                sm = soil[idx] if soil and idx < len(soil) else None
-
-                exists = await db.execute(
-                    select(RainfallObs).where(RainfallObs.zone_id == z.id, RainfallObs.ts == ts)
-                )
-                if exists.scalar_one_or_none():
-                    continue
-
-                db.add(
-                    RainfallObs(
-                        ts=ts,
-                        zone_id=z.id,
-                        rain_1h=float(mm),
-                        rain_24h=r24,
-                        rain_48h=r48,
-                        rain_72h=r72,
-                        rain_7d=r72,
-                        eff_rain=eff,
-                        # Open-Meteo serves volumetric water content (m3/m3,
-                        # e.g. 0.386); the whole API + geotech read PERCENT
-                        # (38.6). Same 100x conversion ml/ingest/weather.py
-                        # does at its boundary â€” the worker must agree or
-                        # FoS and the soil-moisture driver read nonsense.
-                        soil_moisture=(float(sm) * 100.0) if (sm is not None and float(sm) <= 1.0) else sm,
+            for ts_i, (mm, r24, r48, r72, eff, sm) in enumerate(_rolling_rows(tail, soil)):
+                ts = now - timedelta(hours=len(tail) - 1 - ts_i)
+                for zid in zone_ids:
+                    exists = await db.execute(
+                        select(RainfallObs).where(RainfallObs.zone_id == zid, RainfallObs.ts == ts)
                     )
-                )
-                written += 1
+                    if exists.scalar_one_or_none():
+                        continue
+                    db.add(
+                        RainfallObs(
+                            ts=ts,
+                            zone_id=zid,
+                            rain_1h=float(mm),
+                            rain_24h=r24,
+                            rain_48h=r48,
+                            rain_72h=r72,
+                            rain_7d=r72,
+                            eff_rain=eff,
+                            # Open-Meteo serves volumetric water content (m3/m3,
+                            # e.g. 0.386); the whole API + geotech read PERCENT
+                            # (38.6). Same 100x conversion ml/ingest/weather.py
+                            # does at its boundary — the worker must agree or
+                            # FoS and the soil-moisture driver read nonsense.
+                            soil_moisture=(float(sm) * 100.0) if (sm is not None and float(sm) <= 1.0) else sm,
+                        )
+                    )
+                    written += 1
         await db.commit()
     return written
+
+
+def _rolling_rows(tail: list[float], soil: list[float | None] | None):
+    """Yield (mm, r24, r48, r72, eff, sm) per hour of the 72h tail.
+
+    Same rolling-window math the per-zone poller used, hoisted out so the
+    district loop stays readable.
+    """
+    for i, mm in enumerate(tail):
+        idx = i
+        r24 = round(sum(tail[max(0, idx - 23): idx + 1]), 2)
+        r48 = round(sum(tail[max(0, idx - 47): idx + 1]), 2)
+        r72 = round(sum(tail), 2)
+        eff = round(sum(m * (0.5 ** (k / 48)) for k, m in enumerate(reversed(tail[: idx + 1]))), 2)
+        sm = soil[idx] if soil and idx < len(soil) else None
+        yield float(mm), r24, r48, r72, eff, sm
 
 
 @celery_app.task(name="tasks.poll_rainfall")

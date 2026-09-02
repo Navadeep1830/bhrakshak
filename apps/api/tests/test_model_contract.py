@@ -207,3 +207,35 @@ def test_unmeasured_soil_is_not_defaulted():
 
 
 
+
+
+def test_production_bundle_is_real_data_and_serves(monkeypatch):
+    """The artifact actually deployed must be the real-data export.
+
+    Guards the incident where a trainer over synthetic zone-days overwrote
+    model_b_nowcast.pkl with synthetic=False: the gate passed on a lie and
+    the API served a model that had never seen a measured landslide. The
+    real pipeline's bundle carries budget cuts, a git SHA, and a version
+    distinct from the synthetic trainer's.
+
+    This test deliberately bypasses the module's autouse fixture and reads
+    the REAL repository artifact.
+    """
+    real_path = Path(__file__).resolve().parents[1] / "app" / "services" / "ml_models" / "model_b_nowcast.pkl"
+    monkeypatch.setattr(re, "MODEL_B_PATH", real_path)
+    monkeypatch.setattr(re, "_MODEL_B_BUNDLE", None)
+    monkeypatch.setattr(re, "_MODEL_B_REJECTED", False)
+    try:
+        bundle = re.get_model_b_bundle()
+        assert bundle is not None, (
+            "production bundle missing or unloadable - run ml/models/hazard_nowcast.py "
+            "to export the real-data model"
+        )
+        assert bundle.get("synthetic") is not True, (
+            "serving bundle is flagged synthetic - retrain via ml/models/hazard_nowcast.py"
+        )
+        assert bundle.get("git_sha"), "real exports always carry provenance (git SHA)"
+        assert bundle.get("raw_score_thresholds"), "alert-budget cuts missing - fusion would silently degrade"
+    finally:
+        monkeypatch.setattr(re, "_MODEL_B_BUNDLE", None)
+        monkeypatch.setattr(re, "_MODEL_B_REJECTED", False)

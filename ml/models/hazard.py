@@ -105,12 +105,17 @@ def main() -> None:
         "calibrator": calib,
         "scaler": scaler,
         "features": ZONE_FEATURES,
-        "version": "model-b-v1.0-lodo",
-        "synthetic": False,
+        "version": "model-b-v0-synthetic-temporal-split",
+        # HONESTY GATE: this trainer's labels come from make_zone_dataset()'s
+        # generated monsoon process, not measured landslide inventories. The
+        # API's bundle contract refuses to serve synthetic=True — which is the
+        # point. The production bundle must come from the real-data pipeline
+        # (ml/models/hazard_nowcast.py -> _export_api_bundle).
+        "synthetic": True,
         "metrics": metrics,
     }
     joblib.dump(bundle, out_path)
-    print(f"Exported production Model B bundle -> {out_path}")
+    print("Exported SYNTHETIC Model B bundle -> {out_path} (API will refuse to serve it)".format(out_path=out_path))
 
 
 if __name__ == "__main__":
