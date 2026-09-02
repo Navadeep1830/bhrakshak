@@ -1,13 +1,24 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 
+import { AlertsPanel, type LiveAlert } from "./components/AlertsPanel";
+import { BleCrowdPanel } from "./components/BleCrowdPanel";
+import { MeshRelayPanel } from "./components/MeshRelayPanel";
 import { EdgeVisionInspector, type FissureAnalysisResult } from "./components/EdgeVisionInspector";
+import { RainGaugePanel } from "./components/RainGaugePanel";
 import { VoiceRecorder } from "./components/VoiceRecorder";
+import { Icon, LEVEL_COLORS, LEVEL_NAMES } from "./components/ui";
 import { db, getStoredToken, loginAndStore, queueReport, syncQueue } from "./db";
 import { LANGS, makeT, type LangCode } from "./i18n";
+import "./theme.css";
 
 const API = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
 const CATEGORIES = ["crack", "slope_movement", "blocked_road", "past_slide", "water_seepage"] as const;
+const CATEGORY_ICONS: Record<string, string> = {
+  crack: "⚠", slope_movement: "⛰", blocked_road: "🚧", past_slide: "🪨", water_seepage: "💧",
+};
+
+type Tab = "home" | "report" | "mesh";
 
 export default function App() {
   const [lang, setLang] = useState<LangCode>(
@@ -15,165 +26,233 @@ export default function App() {
   );
   const t = makeT(lang);
   const [online, setOnline] = useState(navigator.onLine);
+  const [tab, setTab] = useState<Tab>("home");
+  const [snack, setSnack] = useState<string | null>(null);
+  const [zone, setZone] = useState<{ id: string; name: string; hazard_level: number } | null>(() => {
+    const id = localStorage.getItem("bh_zone_id");
+    const name = localStorage.getItem("bh_zone_name");
+    const lvl = Number(localStorage.getItem("bh_zone_level") ?? "-1");
+    return id ? { id, name: name ?? "your zone", hazard_level: Number.isFinite(lvl) ? lvl : 0 } : null;
+  });
   const pending = useLiveQuery(() => db.reports.where("status").equals("pending").count(), [], 0);
+
+  function toast(m: string) {
+    setSnack(m);
+    window.setTimeout(() => setSnack((cur) => (cur === m ? null : cur)), 3200);
+  }
 
   useEffect(() => localStorage.setItem("bh_lang", lang), [lang]);
   useEffect(() => {
-    const on = () => setOnline(true);
+    const on = () => { setOnline(true); syncQueue(API).then((r) => r.sent && toast(`${r.sent} report${r.sent > 1 ? "s" : ""} synced ✓`)); };
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
-    if (navigator.onLine) syncQueue(API); // flush queue at boot
+    if (navigator.onLine) syncQueue(API).then((r) => r.sent && toast(`${r.sent} report${r.sent > 1 ? "s" : ""} synced ✓`));
     return () => {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
     };
   }, []);
 
+  function handleLiveAlert(a: LiveAlert) {
+    toast(a.message.slice(0, 110));
+    if (a.level >= 3) navigator.vibrate?.([120, 60, 120, 60, 200]);
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      try {
+        new Notification(`L${a.level} · ${LEVEL_NAMES[Math.min(a.level, 4)]}`, { body: a.message, tag: a.id });
+      } catch { /* noop */ }
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-md px-4 pb-24 pt-6">
-      <header className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">
-          Bhu<span className="text-orange-500">Rakshak</span> Field
-        </h1>
+    <div style={{ maxWidth: 520, margin: "0 auto", padding: "0 14px calc(84px + env(safe-area-inset-bottom))" }}>
+      {/* ---------- top app bar ---------- */}
+      <header className="md-appbar" style={{ margin: "0 -14px", padding: "10px 14px" }}>
+        <div style={{ flex: 1 }}>
+          <div className="md-appbar-title">
+            Bhu<span style={{ color: "var(--md-primary)" }}>Rakshak</span>
+            <span style={{ fontWeight: 400, color: "var(--md-on-surface-variant)", fontSize: 15 }}> · Field</span>
+          </div>
+          <div className="md-appbar-sub">
+            {zone ? `${zone.name} · ${LANGS.find((l) => l.code === lang)?.label}` : "resolve your zone…"}
+          </div>
+        </div>
         <select
-          value={lang}
-          onChange={(e) => setLang(e.target.value as LangCode)}
-          className="rounded bg-[#111A2C] p-1.5 text-sm"
+          value={lang} onChange={(e) => setLang(e.target.value as LangCode)}
+          aria-label="language"
+          className="md-pressable"
+          style={{ background: "var(--md-surface-2)", color: "var(--md-on-surface)", border: "1px solid var(--md-outline)", borderRadius: 999, padding: "6px 10px", fontSize: 12.5, outline: "none" }}
         >
-          {LANGS.map((l) => (
-            <option key={l.code} value={l.code}>
-              {l.label}
-            </option>
-          ))}
+          {LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
         </select>
+        <span
+          title={online ? "online" : "offline — reports queue locally"}
+          style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 999,
+            background: online ? "rgba(52,211,153,.14)" : "rgba(248,113,113,.13)",
+            color: online ? "#34d399" : "#f87171" }}
+        >
+          <Icon name={online ? "wifi" : "wifi_off"} size={17} />
+        </span>
       </header>
 
+      {/* ---------- offline banner ---------- */}
       {!online && (
-        <div className="mb-3 rounded-lg bg-yellow-900/60 p-2.5 text-sm text-yellow-200">
-          📴 {t("offline_banner")}
+        <div className="md-rise" style={{
+          display: "flex", alignItems: "center", gap: 9, marginTop: 12,
+          background: "rgba(250,204,21,.1)", border: "1px solid rgba(250,204,21,.35)",
+          color: "#fde68a", borderRadius: "var(--md-radius-m)", padding: "9px 13px", fontSize: 12.5,
+        }}>
+          <Icon name="wifi_off" size={16} />
+          {t("offline_banner")}
         </div>
       )}
 
-      <LoginBar apiUrl={API} />
+      {/* ---------- HOME ---------- */}
+      {tab === "home" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
+          <RiskHero t={t} online={online} zone={zone} />
+          <EmergencyBroadcastBanner t={t} lang={lang} />
+          <RainGaugePanel token={getStoredToken()} onZoneResolved={(z) => {
+            if (!z) return;
+            setZone(z);
+            localStorage.setItem("bh_zone_id", z.id);
+            localStorage.setItem("bh_zone_name", z.name ?? "");
+            localStorage.setItem("bh_zone_level", String(z.hazard_level));
+          }} />
+          <AlertsPanel online={online} onLiveAlert={handleLiveAlert} />
+          <BleCrowdPanel token={getStoredToken()} zoneId={zone?.id ?? null} />
+        </div>
+      )}
 
-      {/* Emergency Multi-Lingual Broadcast Banner */}
-      <EmergencyBroadcastBanner t={t} lang={lang} />
+      {/* ---------- REPORT ---------- */}
+      {tab === "report" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
+          <LoginBar apiUrl={API} onMsg={toast} t={t} />
+          <ReportSection t={t} onSaved={() => { toast("Saved to offline queue ✓"); navigator.vibrate?.(120); }} />
+          <QueueSection pending={pending ?? 0} t={t} online={online} onSync={async () => {
+            const r = await syncQueue(API);
+            toast(r.sent ? `${r.sent} synced ✓` : "Nothing synced — still offline?");
+          }} />
+        </div>
+      )}
 
-      <CitizenBanner t={t} online={online} />
+      {/* ---------- MESH ---------- */}
+      {tab === "mesh" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
+          <MeshRelayPanel onReceived={() => toast("Received a report from a peer ✓")} />
+          <BleCrowdPanel token={getStoredToken()} zoneId={zone?.id ?? null} />
+        </div>
+      )}
 
-      <ReportSection t={t} />
-      <QueueSection
-        pending={pending ?? 0}
-        t={t}
-        onSync={async () => {
-          const r = await syncQueue(API);
-          alert(`${r.sent} synced`);
+      {/* ---------- emergency FAB ---------- */}
+      <button
+        className="md-fab md-pressable"
+        aria-label="safe check-in"
+        onClick={() => {
+          db.checkins.add({ ts: new Date().toISOString(), synced: 0 });
+          navigator.vibrate?.([80, 40, 80]);
+          toast("✓ " + t("safe_checkin"));
         }}
-      />
+      >
+        <Icon name="check" size={26} />
+      </button>
+
+      {/* ---------- snackbar ---------- */}
+      {snack && <div className="md-snackbar">{snack}</div>}
+
+      {/* ---------- bottom navigation ---------- */}
+      <nav className="md-bottomnav">
+        {([
+          { id: "home", icon: "home", label: t("risk_now").split(" ")[0] },
+          { id: "report", icon: "upload", label: t("report") },
+          { id: "mesh", icon: "share", label: "Mesh" },
+        ] as { id: Tab; icon: string; label: string }[]).map((item) => (
+          <button
+            key={item.id}
+            className={`md-navitem md-pressable ${tab === item.id ? "md-navitem-active" : ""}`}
+            onClick={() => setTab(item.id)}
+          >
+            <Icon name={item.icon} size={22} />
+            {item.id === "report" && (pending ?? 0) > 0 && (
+              <span style={{ position: "absolute", top: 2, right: 8, minWidth: 16, height: 16, borderRadius: 999, background: "var(--md-primary)", color: "#fff", fontSize: 9.5, fontWeight: 800, display: "grid", placeItems: "center", padding: "0 4px" }}>
+                {pending}
+              </span>
+            )}
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
 
+/* ---------- risk hero (what every villager checks first) ---------- */
+function RiskHero({ t, online, zone }: { t: ReturnType<typeof makeT>; online: boolean; zone: { id: string; name: string; hazard_level: number } | null }) {
+  const lvl = zone?.hazard_level ?? 0;
+  const color = LEVEL_COLORS[Math.min(lvl, 4)];
+  return (
+    <section className="md-card md-card-elevated md-rise" style={{
+      display: "flex", gap: 16, alignItems: "center",
+      background: `linear-gradient(135deg, ${color}18, var(--md-surface-1) 55%)`,
+      borderColor: `${color}55`,
+    }}>
+      <div style={{
+        width: 66, height: 66, borderRadius: 20, display: "grid", placeItems: "center",
+        background: `${color}1f`, color, fontSize: 26, fontWeight: 900, border: `2px solid ${color}66`,
+      }}>
+        {lvl}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 800, color: "var(--md-on-surface-variant)" }}>
+          {t("risk_now")}
+        </div>
+        <div style={{ fontSize: 21, fontWeight: 800, color, lineHeight: 1.2 }}>{LEVEL_NAMES[Math.min(lvl, 4)]}</div>
+        <div style={{ fontSize: 11.5, color: "var(--md-on-surface-variant)" }}>{zone?.name ?? "resolve your zone when online"}</div>
+      </div>
+      {!online && <Icon name="wifi_off" size={20} style={{ color: "var(--md-on-surface-variant)" }} />}
+    </section>
+  );
+}
+
+/* ---------- emergency broadcast (kept, restyled) ---------- */
 function EmergencyBroadcastBanner({ t, lang }: { t: ReturnType<typeof makeT>; lang: LangCode }) {
   const alertText = t("emergency_alert");
-
   function speakAlert() {
-    if (!window.speechSynthesis) {
-      alert("Text-to-speech not supported on this browser.");
-      return;
-    }
+    if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(alertText);
-    if (lang === "hi") utterance.lang = "hi-IN";
-    else if (lang === "bn") utterance.lang = "bn-IN";
-    else if (lang === "ne") utterance.lang = "ne-NP";
-    else utterance.lang = "en-IN";
+    utterance.lang = lang === "hi" ? "hi-IN" : lang === "bn" ? "bn-IN" : lang === "ne" ? "ne-NP" : "en-IN";
     window.speechSynthesis.speak(utterance);
   }
-
   return (
-    <section className="mb-4 rounded-xl border border-red-600/80 bg-red-950/70 p-3.5 shadow-lg shadow-red-950/40">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="inline-block h-2.5 w-2.5 animate-ping rounded-full bg-red-400" />
-          <span className="text-xs font-black uppercase tracking-wider text-red-300">
-            EMERGENCY BROADCAST (DDMA)
-          </span>
+    <section className="md-rise" style={{
+      borderRadius: "var(--md-radius-l)", border: "1px solid rgba(248,113,113,.5)",
+      background: "linear-gradient(135deg, rgba(248,113,113,.14), var(--md-surface-1) 70%)",
+      padding: 14,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="md-pulse" style={{ width: 9, height: 9, borderRadius: 999, background: "#f87171", display: "inline-block" }} />
+          <span style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: ".1em", color: "#fca5a5" }}>EMERGENCY BROADCAST (DDMA)</span>
         </div>
-        <button
-          onClick={speakAlert}
-          className="flex items-center gap-1 rounded bg-red-900/80 px-2 py-1 text-[11px] font-bold text-red-200 ring-1 ring-red-500/50 hover:bg-red-800"
-        >
-          🔊 Read Aloud
+        <button onClick={speakAlert} className="md-pressable"
+          style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 999, border: "1px solid rgba(248,113,113,.5)", background: "rgba(248,113,113,.12)", color: "#fca5a5", padding: "5px 11px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>
+          <Icon name="volume" size={13} /> Read aloud
         </button>
       </div>
-      <p className="mt-2 text-xs font-semibold leading-relaxed text-red-100">
-        {alertText}
-      </p>
+      <p style={{ margin: "9px 0 0", fontSize: 12.5, fontWeight: 600, lineHeight: 1.55, color: "#fecaca" }}>{alertText}</p>
     </section>
   );
 }
 
-function CitizenBanner({ t, online }: { t: ReturnType<typeof makeT>; online: boolean }) {
-  const [risk, setRisk] = useState<number | null>(null);
-  useEffect(() => {
-    // cached last-known risk; refresh when online (graceful offline)
-    const cached = Number(localStorage.getItem("bh_risk") ?? "-1");
-    setRisk(cached >= 0 ? cached : null);
-    if (!online) return;
-    navigator.geolocation?.getCurrentPosition(
-      async ({ coords }) => {
-        try {
-          const zones = await fetch(
-            `${API}/api/v1/zones?bbox=${coords.longitude - 0.05},${coords.latitude - 0.05},${coords.longitude + 0.05},${coords.latitude + 0.05}`
-          ).then((r) => r.json());
-          const maxLevel = Math.max(0, ...(zones?.map((z: any) => z.hazard_level) ?? [0]));
-          setRisk(maxLevel);
-          localStorage.setItem("bh_risk", String(maxLevel));
-        } catch {
-          /* keep cached */
-        }
-      },
-      () => {},
-      { timeout: 5000 }
-    );
-  }, [online]);
-
-  const colors = ["#22C55E", "#EAB308", "#F97316"];
-  return (
-    <section className="mb-5 rounded-xl border border-[#1E293B] bg-[#111A2C] p-4">
-      <div className="text-sm text-slate-400">{t("risk_now")}</div>
-      <div className="mt-2 flex items-center gap-2">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className={`h-6 flex-1 rounded ${risk !== null && i <= risk ? "" : "opacity-20"}`}
-            style={{ background: colors[i] }}
-          />
-        ))}
-      </div>
-      <button
-        onClick={() => {
-          db.checkins.add({ ts: new Date().toISOString(), synced: 0 });
-          navigator.vibrate?.([80, 40, 80]);
-          alert(t("safe_checkin") + " ✓");
-        }}
-        className="mt-4 w-full rounded-lg bg-emerald-600 py-3 text-lg font-bold active:bg-emerald-700"
-      >
-        ✅ {t("safe_checkin")}
-      </button>
-    </section>
-  );
-}
-
-function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
+/* ---------- report form ---------- */
+function ReportSection({ t, onSaved }: { t: ReturnType<typeof makeT>; onSaved: () => void }) {
   const [category, setCategory] = useState<string>("crack");
   const [description, setDescription] = useState("");
   const [photoB64, setPhotoB64] = useState<string | null>(null);
   const [audioB64, setAudioB64] = useState<string | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
-  const [saved, setSaved] = useState(false);
+  const [sending, setSending] = useState(false);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -184,15 +263,12 @@ function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
   }
 
   async function save() {
+    setSending(true);
     let lat: number | null = null;
     let lon: number | null = null;
     await new Promise<void>((resolve) => {
       navigator.geolocation?.getCurrentPosition(
-        ({ coords }) => {
-          lat = coords.latitude;
-          lon = coords.longitude;
-          resolve();
-        },
+        ({ coords }) => { lat = coords.latitude; lon = coords.longitude; resolve(); },
         () => resolve(),
         { timeout: 6000 }
       );
@@ -205,51 +281,49 @@ function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
       photo_b64: photoB64 || undefined,
       audio_b64: audioB64 || undefined,
       audio_duration_sec: audioDuration || undefined,
+      taken_at: new Date().toISOString(),
     });
     navigator.vibrate?.(120);
     setDescription("");
     setPhotoB64(null);
     setAudioB64(null);
     setAudioDuration(0);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSending(false);
+    onSaved();
   }
 
   return (
-    <section className="rounded-xl border border-[#1E293B] bg-[#111A2C] p-4">
-      <h2 className="mb-3 text-lg font-bold">📷 {t("report")}</h2>
-      <div className="flex flex-wrap gap-2">
+    <section className="md-card md-rise" style={{ animationDelay: ".05s" }}>
+      <h3 className="md-card-title"><span className="md-ico"><Icon name="camera" /></span>{t("report")}</h3>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {CATEGORIES.map((c) => (
-          <button
-            key={c}
-            onClick={() => setCategory(c)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              category === c ? "bg-orange-600 text-white" : "bg-[#0B1220] text-slate-300"
-            }`}
-          >
-            {t(c)}
+          <button key={c} onClick={() => setCategory(c)}
+            className={`md-chip md-pressable ${category === c ? "md-chip-selected" : ""}`}>
+            <span>{CATEGORY_ICONS[c]}</span> {t(c)}
           </button>
         ))}
       </div>
 
-      <div className="mt-3">
-        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 bg-[#0B1220] p-2.5 text-xs text-slate-300 hover:border-orange-500">
-          <span>📸 {photoB64 ? "Photo Attached ✓" : t("photo")}</span>
-          <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
-        </label>
-      </div>
+      <label className="md-pressable" style={{
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12,
+        border: "1.5px dashed var(--md-outline)", borderRadius: "var(--md-radius-m)",
+        background: "var(--md-surface-2)", padding: 13, fontSize: 13, cursor: "pointer",
+        color: photoB64 ? "#34d399" : "var(--md-on-surface-variant)",
+      }}>
+        <Icon name="camera" size={17} /> {photoB64 ? "Photo attached ✓" : t("photo")}
+        <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" style={{ display: "none" }} />
+      </label>
 
       {photoB64 && (
-        <div className="mt-2.5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-emerald-400">
-            <span>Photo attached (Base64 JPEG)</span>
-            <button onClick={() => setPhotoB64(null)} className="text-rose-400 hover:underline">
-              Remove
-            </button>
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "#34d399", marginBottom: 6 }}>
+            <span>On-device AI pre-screen active</span>
+            <button onClick={() => setPhotoB64(null)} className="md-pressable" style={{ border: "none", background: "transparent", color: "#f87171", cursor: "pointer", fontWeight: 700 }}>Remove</button>
           </div>
           <EdgeVisionInspector
             imageSrc={photoB64}
-            onAnalysisComplete={(res) => {
+            onAnalysisComplete={(res: FissureAnalysisResult) => {
               if (res.structuralRisk !== "SAFE" && !description.includes("Fissure density")) {
                 setDescription(
                   (prev) =>
@@ -261,17 +335,10 @@ function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
         </div>
       )}
 
-      {/* Dedicated Offline Voice Note Recorder */}
-      <div className="mt-3">
+      <div style={{ marginTop: 10 }}>
         <VoiceRecorder
-          onAudioRecorded={(b64, dur) => {
-            setAudioB64(b64);
-            setAudioDuration(dur);
-          }}
-          onAudioCleared={() => {
-            setAudioB64(null);
-            setAudioDuration(0);
-          }}
+          onAudioRecorded={(b64, dur) => { setAudioB64(b64); setAudioDuration(dur); }}
+          onAudioCleared={() => { setAudioB64(null); setAudioDuration(0); }}
           initialAudioB64={audioB64 || undefined}
           initialDurationSec={audioDuration}
         />
@@ -282,55 +349,84 @@ function ReportSection({ t }: { t: ReturnType<typeof makeT> }) {
         onChange={(e) => setDescription(e.target.value)}
         placeholder={t("note_ph")}
         rows={2}
-        className="mt-3 w-full rounded-lg bg-[#0B1220] p-3 text-sm outline-none"
+        className="md-input"
+        style={{ marginTop: 12, resize: "vertical" }}
       />
-      <button onClick={save} className="mt-3 w-full rounded-lg bg-orange-600 py-4 text-lg font-bold active:bg-orange-700">
-        {t("save")}
+      <button onClick={save} disabled={sending}
+        className="md-btn md-btn-filled md-btn-lg md-btn-block md-pressable" style={{ marginTop: 12 }}>
+        {sending ? "Saving…" : t("save")}
       </button>
-      {saved && <p className="mt-2 text-center text-sm text-emerald-400">✓ Saved to offline queue — will sync</p>}
     </section>
   );
 }
 
-function LoginBar({ apiUrl }: { apiUrl: string }) {
+/* ---------- login ---------- */
+function LoginBar({ apiUrl, onMsg, t }: { apiUrl: string; onMsg: (m: string) => void; t: ReturnType<typeof makeT> }) {
   const [email, setEmail] = useState(() => localStorage.getItem("bh_token_email") || "field.noney@bhrakshak.in");
   const [pw, setPw] = useState("Field@123");
-  const [msg, setMsg] = useState<string | null>(null);
   const logged = !!getStoredToken();
   return (
-    <section className="mb-3 rounded-xl border border-[#1E293B] bg-[#111A2C] px-3 py-2.5">
-      <div className="flex items-center justify-between text-xs">
-        <span className="font-bold text-slate-300">{logged ? `✓ ${localStorage.getItem("bh_token_email")}` : "Field login (offline-safe, stored token)"}</span>
-        {logged && <button onClick={() => { localStorage.removeItem("bh_token"); localStorage.removeItem("bh_token_email"); setMsg("Logged out"); setTimeout(()=>setMsg(null),1500); }} className="text-rose-400">Logout</button>}
-      </div>
-      <div className="mt-2 flex gap-1.5">
-        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="email" className="min-w-0 flex-1 rounded bg-[#0B1220] px-2 py-1.5 text-xs" />
-        <input value={pw} onChange={e=>setPw(e.target.value)} type="password" placeholder="password" className="w-24 rounded bg-[#0B1220] px-2 py-1.5 text-xs" />
-        <button onClick={async()=>{ const ok=await loginAndStore(apiUrl,email,pw); setMsg(ok?"✓ Logged in":"Login failed"); setTimeout(()=>setMsg(null),2000); }} className="rounded bg-orange-600 px-3 py-1.5 text-xs font-bold">Login</button>
-      </div>
-      {msg && <div className="mt-1 text-xs text-emerald-400">{msg}</div>}
-      <div className="mt-1 text-[11px] text-slate-500">Demo: field.noney@bhrakshak.in / Field@123 · dc.ekh@bhrakshak.in / District@123 · citizen@bhrakshak.in / Citizen@123</div>
+    <section className="md-card md-rise">
+      <h3 className="md-card-title">
+        <span className="md-ico"><Icon name={logged ? "check" : "login"} /></span>
+        {logged ? `${localStorage.getItem("bh_token_email")}` : "Field login"}
+        {logged && (
+          <button onClick={async () => {
+            localStorage.removeItem("bh_token");
+            localStorage.removeItem("bh_token_email");
+            onMsg("Logged out");
+            setTimeout(() => window.location.reload(), 400);
+          }} className="md-pressable" style={{ marginLeft: "auto", border: "none", background: "transparent", color: "#f87171", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <Icon name="logout" size={14} /> Logout
+          </button>
+        )}
+      </h3>
+      {!logged && (
+        <>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input className="md-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" inputMode="email" />
+            <input className="md-input" value={pw} onChange={(e) => setPw(e.target.value)} type="password" placeholder="password" style={{ width: 110 }} />
+          </div>
+          <button className="md-btn md-btn-tonal md-btn-block md-pressable" style={{ marginTop: 10 }}
+            onClick={async () => {
+              const ok = await loginAndStore(apiUrl, email, pw);
+              onMsg(ok ? "✓ Logged in" : "Login failed");
+            }}>
+            Login
+          </button>
+          <div style={{ marginTop: 8, fontSize: 11, color: "var(--md-on-surface-variant)" }}>
+            Demo: field.noney@bhrakshak.in / Field@123
+          </div>
+        </>
+      )}
     </section>
   );
 }
 
-function QueueSection({
-  pending,
-  t,
-  onSync,
-}: {
-  pending: number;
-  t: ReturnType<typeof makeT>;
-  onSync: () => void;
-}) {
+/* ---------- sync queue ---------- */
+function QueueSection({ pending, t, online, onSync }: { pending: number; t: ReturnType<typeof makeT>; online: boolean; onSync: () => void }) {
   return (
-    <section className="mt-4 flex items-center justify-between rounded-xl border border-[#1E293B] bg-[#111A2C] px-4 py-3">
-      <div className="text-sm">
-        <b>{pending}</b> {t("pending")}
+    <section className="md-card md-rise" style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
+      <div style={{
+        width: 44, height: 44, borderRadius: 14, display: "grid", placeItems: "center",
+        background: pending > 0 ? "rgba(249,115,22,.15)" : "rgba(52,211,153,.13)",
+        color: pending > 0 ? "var(--md-primary)" : "#34d399",
+      }}>
+        <Icon name={pending > 0 ? "clock" : "check"} size={20} />
       </div>
-      <button onClick={onSync} className="rounded-lg border border-[#334155] px-4 py-2 text-sm">
-        ⟳ {t("send_queue")}
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 800 }}>{pending} {t("pending")}</div>
+        <div style={{ fontSize: 11.5, color: "var(--md-on-surface-variant)" }}>
+          {online ? "connected — sync anytime" : "will auto-sync when network returns"}
+        </div>
+      </div>
+      <button className="md-btn md-btn-outline md-pressable" onClick={onSync} disabled={!online}>
+        <Icon name="sync" size={16} /> {t("send_queue")}
       </button>
     </section>
   );
 }
+
+// EmergencyBroadcastBanner is rendered inside the home tab via AlertsPanel;
+// kept exported for the district-admin deep link view.
+export { EmergencyBroadcastBanner };
