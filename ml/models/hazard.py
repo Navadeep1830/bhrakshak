@@ -93,6 +93,25 @@ def main() -> None:
         "probabilities are calibrated only for the pilot domain.",
     )
 
+    import joblib
+    from sklearn.preprocessing import StandardScaler
+
+    scaler = StandardScaler().fit(X[train])
+    out_path = Path(__file__).resolve().parents[2] / "apps" / "api" / "app" / "services" / "ml_models" / "model_b_nowcast.pkl"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    bundle = {
+        "lgbm": model,
+        "xgb": None,
+        "calibrator": calib,
+        "scaler": scaler,
+        "features": ZONE_FEATURES,
+        "version": "model-b-v1.0-lodo",
+        "synthetic": False,
+        "metrics": metrics,
+    }
+    joblib.dump(bundle, out_path)
+    print(f"Exported production Model B bundle -> {out_path}")
+
 
 if __name__ == "__main__":
     main()
