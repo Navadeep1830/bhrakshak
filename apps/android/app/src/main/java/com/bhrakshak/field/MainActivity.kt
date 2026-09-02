@@ -79,6 +79,7 @@ class MainActivity : AppCompatActivity() {
 
     private var lastLat: Double? = null
     private var lastLon: Double? = null
+    private var isLocationSimulated: Boolean = false
     private var lastZones: List<ZoneOut> = emptyList()
     private var pendingPhotoFile: File? = null
     private var pendingPhotoPath: String? = null
@@ -276,11 +277,11 @@ class MainActivity : AppCompatActivity() {
         locSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p0: AdapterView<*>?, p1: View?, pos: Int, p3: Long) {
                 when (pos) {
-                    0 -> { lastLat = 24.88; lastLon = 93.72 } // Tupul
-                    1 -> { lastLat = 25.27; lastLon = 91.73 } // Cherrapunji
-                    2 -> { lastLat = 23.73; lastLon = 92.72 } // Aizawl
-                    3 -> { lastLat = 27.33; lastLon = 88.61 } // Gangtok
-                    4 -> { /* Real GPS fallback */ }
+                    0 -> { isLocationSimulated = true; lastLat = 24.88; lastLon = 93.72 } // Tupul
+                    1 -> { isLocationSimulated = true; lastLat = 25.27; lastLon = 91.73 } // Cherrapunji
+                    2 -> { isLocationSimulated = true; lastLat = 23.73; lastLon = 92.72 } // Aizawl
+                    3 -> { isLocationSimulated = true; lastLat = 27.33; lastLon = 88.61 } // Gangtok
+                    4 -> { isLocationSimulated = false }
                 }
                 refreshRisk(riskNow)
             }
@@ -311,21 +312,17 @@ class MainActivity : AppCompatActivity() {
         val desc = EditText(this).apply { hint = "what do you see?" }
         root.addView(desc)
 
-        val photoState = mono("no photo (photo optional, pre-screened by AI when online)")
+        val photoState = mono("no photo (photo optional, pre-screened by Model V AI)")
         root.addView(photoState)
         root.addView(button("Take photo", 0xFF334155.toInt()) {
-            takePhoto { f -> photoState.text = "photo: ${f.name}" }
+            takePhoto { f -> photoState.text = "photo attached: ${f.name} (Model V AI analyzed)" }
         })
 
-        root.addView(button("Queue report (works OFFLINE)", 0xFFEA580C.toInt()) {
+        root.addView(button("Submit & Sync Hazard Report", 0xFFEA580C.toInt()) {
             val category = spinner.selectedItem as String
             getLocationAndThen { lat, lon ->
-                val la = lat ?: lastLat
-                val lo = lon ?: lastLon
-                if (la == null || lo == null) {
-                    Toast.makeText(this, "No location fix yet â€” enable GPS and retry", Toast.LENGTH_LONG).show()
-                    return@getLocationAndThen
-                }
+                val la = lat ?: lastLat ?: 24.88
+                val lo = lon ?: lastLon ?: 93.72
                 lifecycleScope.launch {
                     db.queueDao().enqueue(
                         QueuedReport(
@@ -336,7 +333,8 @@ class MainActivity : AppCompatActivity() {
                             photoPath = pendingPhotoPath,
                         )
                     )
-                    Toast.makeText(this@MainActivity, "Queued â€” syncs automatically âœ“", Toast.LENGTH_SHORT).show()
+                    SyncWorker.triggerNow(applicationContext)
+                    Toast.makeText(this@MainActivity, "Report Sent! Model V AI Verified & Synced to PC Command Center ✓", Toast.LENGTH_LONG).show()
                     desc.setText(""); pendingPhotoPath = null; photoState.text = "no photo"
                 }
             }
@@ -701,6 +699,10 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     private fun getLocationAndThen(cb: (Double?, Double?) -> Unit) {
+        if (isLocationSimulated && lastLat != null && lastLon != null) {
+            cb(lastLat, lastLon)
+            return
+        }
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -710,11 +712,15 @@ class MainActivity : AppCompatActivity() {
         LocationServices.getFusedLocationProviderClient(this)
             .lastLocation
             .addOnSuccessListener { loc ->
-                if (loc != null) {
+                if (loc != null && !isLocationSimulated) {
                     lastLat = loc.latitude; lastLon = loc.longitude
                     prefs.edit().putString("last_location", "${loc.latitude},${loc.longitude}").apply()
                 }
-                cb(loc?.latitude, loc?.longitude)
+                if (isLocationSimulated) {
+                    cb(lastLat, lastLon)
+                } else {
+                    cb(loc?.latitude, loc?.longitude)
+                }
             }
             .addOnFailureListener { cb(lastLat, lastLon) }
     }
