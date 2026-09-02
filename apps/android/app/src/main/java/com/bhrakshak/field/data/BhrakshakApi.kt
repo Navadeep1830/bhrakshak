@@ -199,6 +199,24 @@ data class PhotoVerdict(
     @SerialName("media_key") val mediaKey: String? = null,
 )
 
+@Serializable
+data class ChatMessageIn(
+    @SerialName("sender_name") val senderName: String,
+    val location: String? = null,
+    val message: String,
+    val role: String? = null,
+)
+
+@Serializable
+data class ChatMessageOut(
+    val id: String,
+    @SerialName("sender_name") val senderName: String,
+    val location: String,
+    val message: String,
+    val role: String,
+    val timestamp: String,
+)
+
 // ---------------------------------------------------------------------------
 // Retrofit API
 // ---------------------------------------------------------------------------
@@ -245,6 +263,12 @@ interface BhrakshakApi {
         @Query("taken_at") takenAt: String? = null,
         @Header("Authorization") token: String,
     ): PhotoVerdict
+
+    @GET("api/v1/chat/messages")
+    suspend fun chatMessages(): List<ChatMessageOut>
+
+    @POST("api/v1/chat/send")
+    suspend fun sendChatMessage(@Body msg: ChatMessageIn): ChatMessageOut
 }
 
 // ---------------------------------------------------------------------------

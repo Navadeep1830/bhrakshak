@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
+import { ChatWidget } from "@/components/chat/ChatWidget";
 import { KpiBar } from "@/components/kpi/KpiBar";
 import { TopNav } from "@/components/nav/TopNav";
 import { Ticker } from "@/components/ticker/Ticker";
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </div>
           <Ticker />
+          <ChatWidget />
         </main>
       </body>
     </html>

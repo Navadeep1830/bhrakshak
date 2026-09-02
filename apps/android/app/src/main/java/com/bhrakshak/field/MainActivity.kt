@@ -292,6 +292,7 @@ class MainActivity : AppCompatActivity() {
 
         root.addView(button("I'M SAFE — check in", 0xFF059669.toInt()) { safeCheckin() })
         root.addView(button("SAFEST ROUTE (pathway model)", 0xFF0284C7.toInt()) { showSafeRoute() })
+        root.addView(button("💬 LIVE EMERGENCY CHAT (Command Center)", 0xFF2563EB.toInt()) { lifecycleScope.launch { showChatScreen() } })
         root.addView(button("RAIN GAUGE (nearest zone)", 0xFF7C3AED.toInt()) { showRainGauge() })
         root.addView(button("ALERTS", 0xFFB45309.toInt()) { lifecycleScope.launch { showAlerts() } })
         root.addView(button("LOGOUT", 0xFF991B1B.toInt()) {
@@ -625,8 +626,73 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private suspend fun showChatScreen() {
+        val chatStatus = withContext(Dispatchers.Main) {
+            root.removeAllViews()
+            root.addView(title("FIELD EMERGENCY CHAT"))
+            root.addView(label("Direct 2-way live messaging with DC Command Center (HQ)"))
+            
+            val msgBox = mono("loading messages…", 13f)
+            root.addView(msgBox)
+            
+            val inputEdit = EditText(this@MainActivity).apply {
+                hint = "Type message to Command Center..."
+                setSingleLine()
+            }
+            root.addView(inputEdit)
+            
+            val email = TokenStore.email(this@MainActivity) ?: "Field Responder"
+            val locName = when {
+                lastLat == 24.88 -> "Tupul Station Yard (Noney)"
+                lastLat == 25.27 -> "Cherrapunji Cut-Slope (EKH)"
+                lastLat == 23.73 -> "Aizawl North Slope"
+                lastLat == 27.33 -> "Gangtok Highway Sector"
+                else -> "Field Location"
+            }
+            
+            root.addView(button("SEND TO COMMAND CENTER", 0xFFEA580C.toInt()) {
+                val txt = inputEdit.text.toString().trim()
+                if (txt.isNotEmpty()) {
+                    lifecycleScope.launch {
+                        try {
+                            Api.service.sendChatMessage(
+                                com.bhrakshak.field.data.ChatMessageIn(
+                                    senderName = email,
+                                    location = locName,
+                                    message = txt,
+                                    role = "field_responder",
+                                )
+                            )
+                            inputEdit.setText("")
+                            Toast.makeText(this@MainActivity, "Message Sent to PC Command Center ✓", Toast.LENGTH_SHORT).show()
+                            showChatScreen()
+                        } catch (e: Exception) {
+                            Toast.makeText(this@MainActivity, "Send failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            })
+            root.addView(button("Back", 0xFF334155.toInt()) { showHome() })
+            msgBox
+        }
+        
+        try {
+            val msgs = Api.service.chatMessages()
+            withContext(Dispatchers.Main) {
+                chatStatus.text = if (msgs.isEmpty()) "No chat messages yet."
+                else msgs.joinToString("\n\n") { m ->
+                    "👤 ${m.senderName} (${m.location})\n💬 ${m.message}\n⏰ ${m.timestamp.take(19).replace('T', ' ')}"
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                chatStatus.text = "Chat history offline: ${e.message}"
+            }
+        }
+    }
+
     private fun levelTag(level: Int) = when (level) {
-        4 -> "ðŸ”´ L4 EMERGENCY"; 3 -> "ðŸŸ  L3 WARNING"; 2 -> "ðŸŸ¡ L2 ALERT"; 1 -> "ðŸŸ¢ L1 WATCH"; else -> "Â· L0"
+        4 -> "🔴 L4 EMERGENCY"; 3 -> "🟠 L3 WARNING"; 2 -> "🟡 L2 ALERT"; 1 -> "🟢 L1 WATCH"; else -> "· L0"
     }
 
     // ------------------------------------------------------------------ photo + Model V pre-screen
