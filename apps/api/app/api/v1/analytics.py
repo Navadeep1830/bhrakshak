@@ -180,6 +180,55 @@ class DebrisRunoutRequestIn(BaseModel):
     scenario_name: str = "Tupul 2022 Benchmark Landslide Runout"
 
 
+@router.get("/micro-heatmap")
+async def micro_heatmap(district: str | None = None):
+    """Tier-2 micro-susceptibility heatmap (Model A v2): per-pixel 0-100
+    percentile grids over REAL ~35 m terrarium DEM terrain, aggregated to
+    ~1 km block context. Served as raster-ish JSON; the dashboard renders
+    it as a GeoJSON-ish overlay via the bbox + shape contract.
+
+    Two-tier story: Tier 1 (hazard nowcast) = WHEN a district alerts;
+    Tier 2 (this layer) = WHICH slopes inside it are dangerous. Computed by
+    `python -m ml.ingest.dem_real` + `python -m ml.models.micro_susceptibility`.
+    """
+    from app.services.micro_susc import load_micro_heatmap
+
+    payload = load_micro_heatmap()
+    if payload is None:
+        return {
+            "available": False,
+            "note": "micro-susceptibility artifact missing - run "
+                    "`python -m ml.ingest.dem_real` then "
+                    "`python -m ml.models.micro_susceptibility`",
+            "grids": {},
+        }
+    grids = payload
+    if district:
+        wanted = district.lower().strip()
+        grids = {k: v for k, v in payload.items()
+                 if wanted in (v.get("district") or "").lower()
+                 or wanted in (v.get("state") or "").lower()}
+    return {
+        "available": bool(grids),
+        "model_version": next(iter(grids.values()), {}).get("model_version"),
+        "scale": "0-100 district-relative percentile; class cuts 20/40/60/80",
+        "grids": grids,
+    }
+
+
+@router.post("/micro-heatmap/refresh-susceptibility")
+async def refresh_zone_susceptibility_endpoint(recompute: bool = False,
+                                               db: AsyncSession = Depends(get_db),
+                                               _user=Depends(require_roles(*ADMIN_ONLY))):
+    """Replace seed pseudo-random zone susceptibility with REAL terrain stats
+    sampled from the micro-susceptibility grid inside each zone polygon.
+    Model B's I-D bands and the priority queue pick the new values up on the
+    next evaluation tick (or immediately with recompute=true)."""
+    from app.services.micro_susc import refresh_zone_susceptibility
+
+    return await refresh_zone_susceptibility(db, recompute=recompute)
+
+
 @router.post("/debris-runout")
 async def compute_debris_runout(payload: DebrisRunoutRequestIn):
     """Computes Voellmy-Salm 1D shallow-water debris runout velocity, inundation depth, and kinetic impact pressure on downstream settlements."""

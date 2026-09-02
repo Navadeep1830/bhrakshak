@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ADMIN_ONLY, require_roles
@@ -55,19 +56,32 @@ async def inject_rainfall_storm(
             # ingestor fills them); the injector derives them from the storm
             # ramp so Model B's full feature contract is satisfiable instead of
             # every prediction refusing for missing antecedents.
-            db.add(
-                RainfallObs(
-                    ts=ts,
-                    zone_id=z.id,
-                    rain_1h=intensity,
-                    rain_24h=rain_24h,
-                    rain_48h=round(rain_24h * 1.4, 1),
-                    rain_72h=round(rain_24h * 1.7, 1),
-                    rain_7d=round(rain_24h * 2.3, 1),
-                    eff_rain=round(rain_24h * 0.8, 1),
-                    soil_moisture=min(98.0, 55 + intensity),
-                )
+            # Upsert on (ts, zone_id): re-running the demo within the same hour
+            # must refresh the ramp, not collide with the hypertable PK.
+            stmt = pg_insert(RainfallObs).values(
+                ts=ts,
+                zone_id=z.id,
+                rain_1h=intensity,
+                rain_24h=rain_24h,
+                rain_48h=round(rain_24h * 1.4, 1),
+                rain_72h=round(rain_24h * 1.7, 1),
+                rain_7d=round(rain_24h * 2.3, 1),
+                eff_rain=round(rain_24h * 0.8, 1),
+                soil_moisture=min(98.0, 55 + intensity),
             )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["ts", "zone_id"],
+                set_={
+                    "rain_1h": stmt.excluded.rain_1h,
+                    "rain_24h": stmt.excluded.rain_24h,
+                    "rain_48h": stmt.excluded.rain_48h,
+                    "rain_72h": stmt.excluded.rain_72h,
+                    "rain_7d": stmt.excluded.rain_7d,
+                    "eff_rain": stmt.excluded.eff_rain,
+                    "soil_moisture": stmt.excluded.soil_moisture,
+                },
+            )
+            await db.execute(stmt)
     await db.commit()
 
     # Two evaluation ticks: hysteresis escalates only after 2 consecutive

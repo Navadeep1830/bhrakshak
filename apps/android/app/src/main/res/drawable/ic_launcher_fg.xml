@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- shield -->
+    <path
+        android:fillColor="#EA580C"
+        android:pathData="M54,24 L78,32 L78,54 C78,68 68,80 54,86 C40,80 30,68 30,54 L30,32 Z" />
+    <!-- mountain cut -->
+    <path
+        android:fillColor="#0B1220"
+        android:pathData="M38,58 L48,42 L54,52 L60,38 L70,58 Z" />
+</vector>

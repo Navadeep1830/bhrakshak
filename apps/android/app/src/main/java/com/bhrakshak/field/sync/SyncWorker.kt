@@ -1,16 +1,18 @@
-package in.bhrakshak.field.sync
+package com.bhrakshak.field.sync
 
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import in.bhrakshak.field.data.Api
-import in.bhrakshak.field.data.BhuDb
-import in.bhrakshak.field.data.ReportItem
-import in.bhrakshak.field.data.SyncBatchIn
-import in.bhrakshak.field.data.TokenStore
+import com.bhrakshak.field.data.Api
+import com.bhrakshak.field.data.BhuDb
+import com.bhrakshak.field.data.ReportItem
+import com.bhrakshak.field.data.SyncBatchIn
+import com.bhrakshak.field.data.TokenStore
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -18,9 +20,10 @@ import java.util.concurrent.TimeUnit
  * Flushes the offline report queue to the backend.
  *
  * Scheduled every 15 minutes AND triggered immediately on connectivity
- * (ConnectivityManager callback in MainActivity). Retries forever with
- * backoff — WorkManager guarantees the enqueue survives process death
- * and reboots, which is the whole point for NER valleys with patchy links.
+ * (ConnectivityManager callback registered in MainActivity — see
+ * [triggerNow]). Retries forever with backoff — WorkManager guarantees the
+ * enqueue survives process death and reboots, which is the whole point for
+ * NER valleys with patchy links.
  */
 class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
 
@@ -37,6 +40,8 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
             val out = Api.service.syncReports(
                 SyncBatchIn(
                     batchId = UUID.randomUUID().toString(),
+                    // backend ReportIn requires lat/lon; queue rows always carry
+                    // them because the composer falls back to last-known fix
                     reports = pending.map { r ->
                         ReportItem(
                             clientId = r.clientId,
@@ -45,8 +50,8 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
                             lon = r.lon,
                             description = r.description,
                             takenAt = r.takenAt,
-                            mediaRefs = emptyList(), // photo upload lands in Phase 2
-                            exifGeoOk = r.lat != null && r.lon != null,
+                            mediaRefs = listOfNotNull(r.mediaKey),
+                            exifGeoOk = true,
                         )
                     },
                 ),
@@ -66,6 +71,15 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
                 "bhrakshak-sync",
                 ExistingPeriodicWorkPolicy.KEEP,
                 PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES).build(),
+            )
+        }
+
+        /** Immediate flush — called when the network comes back. */
+        fun triggerNow(ctx: Context) {
+            WorkManager.getInstance(ctx).enqueueUniqueWork(
+                "bhrakshak-sync-now",
+                ExistingWorkPolicy.REPLACE,
+                OneTimeWorkRequestBuilder<SyncWorker>().build(),
             )
         }
     }

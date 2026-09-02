@@ -1,4 +1,4 @@
-package in.bhrakshak.field.data
+package com.bhrakshak.field.data
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -8,9 +8,7 @@ import androidx.security.crypto.MasterKey
  * JWT persistence. Access + refresh tokens live in EncryptedSharedPreferences
  * (AES-256, hardware-backed Keystore) — never in plain SharedPreferences.
  *
- * Same contract as the PWA: access token is attached to every request;
- * on 401 the sync worker transparently re-logs-in with the stored refresh
- * or falls back to the demo citizen, mirroring db.ts syncQueue().
+ * Same contract as the PWA: access token is attached to every request.
  */
 object TokenStore {
     private const val FILE = "bhrakshak_secure"

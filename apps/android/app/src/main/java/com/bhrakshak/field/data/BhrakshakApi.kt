@@ -1,28 +1,31 @@
-package in.bhrakshak.field.data
+package com.bhrakshak.field.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import com.bhrakshak.field.BuildConfig
+import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
-import retrofit2.converter.kotlinxserialization.asConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
 
 /** Base URL of the shared FastAPI backend. Same server as dashboard + PWA. */
 object ApiConfig {
-    // emulator loopback; override per build for physical devices
-    const val BASE_URL: String = BuildConfig.API_BASE_URL
+    val BASE_URL: String get() = BuildConfig.API_BASE_URL
+    val WS_URL: String get() = BuildConfig.WS_URL
 }
 
 // ---------------------------------------------------------------------------
-// DTOs — mirror apps/api/app/schemas/schemas.py exactly
+// DTOs — field names verified against the live /openapi.json responses
 // ---------------------------------------------------------------------------
 @Serializable
 data class LoginIn(val email: String, val password: String)
@@ -31,15 +34,16 @@ data class LoginIn(val email: String, val password: String)
 data class TokenOut(
     @SerialName("access_token") val accessToken: String,
     @SerialName("refresh_token") val refreshToken: String? = null,
-    @SerialName("token_type") val tokenType: String = "bearer"
+    @SerialName("token_type") val tokenType: String = "bearer",
+    val role: String? = null,
 )
 
 @Serializable
 data class ZoneOut(
     val id: String,
     @SerialName("zone_code") val zoneCode: String,
-    val name: String?,
-    val district: String?,
+    val name: String? = null,
+    val district: String? = null,
     val state: String? = null,
     @SerialName("susc_mean") val suscMean: Double? = null,
     @SerialName("susc_p90") val suscP90: Double? = null,
@@ -53,8 +57,8 @@ data class ZoneOut(
 data class ReportItem(
     @SerialName("client_id") val clientId: String,
     val category: String,
-    val lat: Double?,
-    val lon: Double?,
+    val lat: Double,
+    val lon: Double,
     val description: String? = null,
     @SerialName("taken_at") val takenAt: String? = null,
     @SerialName("media_refs") val mediaRefs: List<String> = emptyList(),
@@ -76,55 +80,104 @@ data class SyncBatchOut(
     @SerialName("synced_ids") val syncedIds: List<String>,
 )
 
+// --- evacuation / pathway model -------------------------------------------
 @Serializable
 data class SafeRouteOut(
+    val origin: Origin? = null,
     val destination: Destination,
     @SerialName("safety_score") val safetyScore: Double,
-    val route: RouteGeometry,
+    val route: RouteGeometry? = null,
     @SerialName("route_length_km") val routeLengthKm: Double,
     @SerialName("eta_minutes") val etaMinutes: Int,
-    @SerialName("mean_hazard_along_route") val meanHazard: Double,
+    @SerialName("mean_hazard_along_route") val meanHazard: Double = 0.0,
+    @SerialName("max_hazard_along_route") val maxHazard: Double = 0.0,
+    @SerialName("avoided_levels") val avoidedLevels: List<Int> = emptyList(),
     val alternatives: List<AlternativeShelter> = emptyList(),
 )
 
 @Serializable
+data class Origin(val lat: Double, val lon: Double)
+
+@Serializable
 data class Destination(
-    val id: String, val name: String, val district: String?,
-    val lat: Double, val lon: Double,
-    val capacity: Int? = null, val occupancy: Int? = null,
+    val id: String,
+    val name: String,
+    val district: String? = null,
+    val lat: Double,
+    val lon: Double,
+    val capacity: Int? = null,
+    val occupancy: Int? = null,
     @SerialName("has_medical") val hasMedical: Boolean? = null,
+    @SerialName("slope_deg") val slopeDeg: Double? = null,
+    @SerialName("distance_to_steep_slope_m") val distToSteepM: Double? = null,
 )
 
 @Serializable
 data class RouteGeometry(val type: String, val coordinates: List<List<Double>>)
 
 @Serializable
-data class AlternativeShelter(val shelter_id: String, val safety: Double, @SerialName("distance_km") val distanceKm: Double)
+data class AlternativeShelter(
+    @SerialName("shelter_id") val shelterId: String,
+    val safety: Double,
+    @SerialName("distance_km") val distanceKm: Double,
+)
 
+// --- rain gauge ------------------------------------------------------------
 @Serializable
 data class WeatherOut(
     @SerialName("zone_code") val zoneCode: String,
+    val district: String? = null,
     @SerialName("has_data") val hasData: Boolean,
     val current: CurrentWeather? = null,
     @SerialName("id_threshold_check") val idCheck: IdCheck? = null,
+    @SerialName("n_points") val nPoints: Int? = null,
 )
 
 @Serializable
 data class CurrentWeather(
-    val ts: String,
-    @SerialName("rain_1h_mm") val rain1h: Double?,
-    @SerialName("rain_24h_mm") val rain24h: Double?,
-    @SerialName("rain_72h_mm") val rain72h: Double?,
-    @SerialName("eff_rain_mm") val effRain: Double?,
-    @SerialName("soil_moisture_pct") val soilMoisture: Double?,
-    val trend: String?,
+    val ts: String? = null,
+    @SerialName("rain_1h_mm") val rain1h: Double? = null,
+    @SerialName("rain_24h_mm") val rain24h: Double? = null,
+    @SerialName("rain_48h_mm") val rain48h: Double? = null,
+    @SerialName("rain_72h_mm") val rain72h: Double? = null,
+    @SerialName("rain_7d_mm") val rain7d: Double? = null,
+    @SerialName("eff_rain_mm") val effRain: Double? = null,
+    @SerialName("soil_moisture_pct") val soilMoisture: Double? = null,
+    val trend: String? = null,
 )
 
 @Serializable
 data class IdCheck(
-    @SerialName("breach_1h") val breach1h: Boolean,
-    @SerialName("breach_24h") val breach24h: Boolean,
-    @SerialName("any_breach") val anyBreach: Boolean,
+    @SerialName("i_1h_observed") val i1hObserved: Double? = null,
+    @SerialName("i_1h_critical") val i1hCritical: Double? = null,
+    @SerialName("breach_1h") val breach1h: Boolean = false,
+    @SerialName("i_24h_mean_observed") val i24hObserved: Double? = null,
+    @SerialName("i_24h_critical") val i24hCritical: Double? = null,
+    @SerialName("breach_24h") val breach24h: Boolean = false,
+    @SerialName("any_breach") val anyBreach: Boolean = false,
+)
+
+// --- alerts ------------------------------------------------------------------
+@Serializable
+data class AlertOut(
+    val id: String,
+    @SerialName("zone_id") val zoneId: String? = null,
+    val level: Int,
+    val channels: List<String> = emptyList(),
+    val recipients: Int? = null,
+    @SerialName("message_template") val message: String? = null,
+    @SerialName("ack_at") val ackAt: String? = null,
+    @SerialName("fired_at") val firedAt: String? = null,
+)
+
+// --- Model V geo-photo AI pre-screen ----------------------------------------
+@Serializable
+data class PhotoVerdict(
+    val verdict: String,           // POSITIVE | POSSIBLE | NEGATIVE
+    val probability: Double,
+    @SerialName("gps_mismatch_m") val gpsMismatchM: Double? = null,
+    val flags: List<String> = emptyList(),
+    @SerialName("media_key") val mediaKey: String? = null,
 )
 
 // ---------------------------------------------------------------------------
@@ -155,7 +208,24 @@ interface BhrakshakApi {
     ): SafeRouteOut
 
     @GET("api/v1/zones/{zoneId}/weather")
-    suspend fun zoneWeather(@retrofit2.http.Path("zoneId") zoneId: String): WeatherOut
+    suspend fun zoneWeather(
+        @retrofit2.http.Path("zoneId") zoneId: String,
+    ): WeatherOut
+
+    @GET("api/v1/alerts")
+    suspend fun alerts(
+        @Header("Authorization") token: String,
+    ): List<AlertOut>
+
+    @Multipart
+    @POST("api/v1/reports/analyze-photo")
+    suspend fun analyzePhoto(
+        @Part photo: okhttp3.MultipartBody.Part,
+        @Query("lat") lat: Double? = null,
+        @Query("lon") lon: Double? = null,
+        @Query("taken_at") takenAt: String? = null,
+        @Header("Authorization") token: String,
+    ): PhotoVerdict
 }
 
 // ---------------------------------------------------------------------------
@@ -166,15 +236,20 @@ object Api {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
         .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
         .build()
 
+    val wsClient = OkHttpClient.Builder()
+        .pingInterval(20, TimeUnit.SECONDS)
+        .build()
+
     val service: BhrakshakApi by lazy {
+        val contentType = "application/json".toMediaType()
         Retrofit.Builder()
             .baseUrl(if (ApiConfig.BASE_URL.endsWith("/")) ApiConfig.BASE_URL else ApiConfig.BASE_URL + "/")
             .client(client)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .addConverterFactory(json.asConverterFactory(contentType))
             .build()
             .create(BhrakshakApi::class.java)
     }

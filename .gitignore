@@ -10,3 +10,21 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+
+# ML raw caches (regenerable via python -m ml.ingest.dem_real); artifacts/ ARE committed
+ml/cache/
+__pycache__/
+
+# --- root housekeeping (never commit) ---
+.env
+node_modules/
+.next/
+dist/
+__pycache__/
+.pytest_cache/
+.cache-backup-centroid/
+.freebuff/
+.workbuddy-ai/
+apps/android/app/build/
+apps/android/.gradle/
+apps/dashboard/tsconfig.tsbuildinfo

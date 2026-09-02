@@ -1,0 +1,19 @@
+{
+  "source": "aws-terrarium",
+  "zoom": 12,
+  "aois": {
+    "ML-EKH": {
+      "district": "East Khasi Hills",
+      "shape": [
+        2589,
+        2330
+      ],
+      "res_m": 34.5,
+      "elev_min": 0.0,
+      "elev_max": 2723.0,
+      "source": "aws-terrarium-z12",
+      "synthetic": false
+    }
+  },
+  "synthetic": false
+}
