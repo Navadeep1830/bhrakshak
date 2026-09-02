@@ -109,18 +109,28 @@ class LiveAlertService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ALERTS, "Landslide alerts", NotificationManager.IMPORTANCE_HIGH,
-            ),
-        )
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ONGOING, "Live connection", NotificationManager.IMPORTANCE_MIN,
-            ),
-        )
-        startForeground(ONGOING_ID, persistentNotification())
+        runCatching {
+            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ALERTS, "Landslide alerts", NotificationManager.IMPORTANCE_HIGH,
+                ),
+            )
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ONGOING, "Live connection", NotificationManager.IMPORTANCE_MIN,
+                ),
+            )
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                startForeground(
+                    ONGOING_ID,
+                    persistentNotification(),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                )
+            } else {
+                startForeground(ONGOING_ID, persistentNotification())
+            }
+        }
         connect()
     }
 
@@ -136,9 +146,11 @@ class LiveAlertService : LifecycleService() {
         private const val ONGOING_ID = 1001
 
         fun start(ctx: android.content.Context) {
-            ContextCompat.startForegroundService(
-                ctx, Intent(ctx, LiveAlertService::class.java),
-            )
+            runCatching {
+                ContextCompat.startForegroundService(
+                    ctx, Intent(ctx, LiveAlertService::class.java),
+                )
+            }
         }
     }
 }
