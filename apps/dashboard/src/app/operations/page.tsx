@@ -3,7 +3,7 @@
 import { Camera, Check, ChevronDown, MapPin, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { apiGet, endpoints } from "@/lib/api";
+import { apiGet, endpoints, ensureToken } from "@/lib/api";
 import { LEVEL_COLORS, LEVEL_NAMES, cn } from "@/lib/utils";
 import type { AlertRow, PriorityRow } from "@/lib/types";
 
@@ -18,7 +18,7 @@ export default function OperationsPage() {
           <div>
             <h1 className="text-xl font-bold tracking-tight">Operations</h1>
             <p className="text-sm text-muted">
-              Model D — ranked response queue &amp; Model V AI hazard report inspection
+              Model D — ranked response queue & Model V AI hazard report inspection
             </p>
           </div>
           <div className="flex rounded-lg bg-bg p-1">
@@ -193,7 +193,7 @@ function Queue() {
                         className={cn(
                           "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
                           assigned[r.zone_id] === team &&
-                            "border-emerald-700 bg-emerald-950 text-l0",
+                          "border-emerald-700 bg-emerald-950 text-l0",
                           !assigned[r.zone_id]
                             ? "border-edge text-slate-300 hover:border-orange-700"
                             : "border-edge/50 text-muted"
@@ -224,12 +224,8 @@ function AlertConsole() {
 
   async function load() {
     try {
-      const login = await fetch(`${endpoints.API}/api/v1/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "admin@bhrakshak.in", password: "Admin@123" }),
-      }).then((r) => r.json());
-      const rows = await apiGet<AlertRow[]>("/api/v1/alerts?limit=50", login.access_token);
+      const token = await ensureToken();
+      const rows = await apiGet<AlertRow[]>("/api/v1/alerts?limit=50", token);
       setAlerts(rows);
     } catch {
       setAlerts([]);
@@ -240,14 +236,10 @@ function AlertConsole() {
   }, []);
 
   async function ack(id: string) {
-    const login = await fetch(`${endpoints.API}/api/v1/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "admin@bhrakshak.in", password: "Admin@123" }),
-    }).then((r) => r.json());
+    const token = await ensureToken();
     await fetch(`${endpoints.API}/api/v1/alerts/${id}/ack`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${login.access_token}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: "{}",
     });
     load();
@@ -330,38 +322,82 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 function ReportsInbox() {
   const [reports, setReports] = useState<any[] | null>(null);
   const [verifiedIds, setVerifiedIds] = useState<Record<string, string>>({});
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  const load = () => {
+    // staff-gated endpoint: session token via ensureToken() (no inline creds)
+    ensureToken()
+      .then((token) => apiGet<any[]>("/api/v1/reports?status_filter=pending&limit=50", token))
+      .then(setReports)
+      .catch(() => setReports([]));
+  };
 
   useEffect(() => {
-    (async () => {
+    load();
+    // Live refresh: the backend publishes a "report" event on every
+    // /reports/sync (mobile + PWA submissions) so the inbox updates without
+    // a manual reload during the demo.
+    const base = endpoints.API.replace(/^http/, "ws");
+    let ws: WebSocket | null = null;
+    let retry = 0;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      if (stopped) return;
       try {
-        // staff-gated endpoint: login like AlertConsole does
-        const login = await fetch(`${endpoints.API}/api/v1/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "admin@bhrakshak.in", password: "Admin@123" }),
-        }).then((r) => r.json());
-        const rows = await apiGet<any[]>("/api/v1/reports?status_filter=pending&limit=50", login.access_token);
-        setReports(rows);
+        ws = new WebSocket(`${base}/ws/live`);
       } catch {
-        setReports([]);
+        schedule();
+        return;
       }
-    })();
+      ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === "report") load();
+        } catch { }
+      };
+      ws.onclose = () => schedule();
+      ws.onerror = () => ws?.close();
+    };
+    const schedule = () => {
+      if (stopped || timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        retry = Math.min(retry + 1, 5);
+        connect();
+      }, Math.min(1000 * 2 ** retry, 15000));
+    };
+    connect();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      ws?.close();
+    };
   }, []);
 
   const handleVerify = async (id: string, decision: "verified" | "rejected") => {
-    setVerifiedIds((prev) => ({ ...prev, [id]: decision }));
+    setVerifyError(null);
     try {
-      const login = await fetch(`${endpoints.API}/api/v1/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "admin@bhrakshak.in", password: "Admin@123" }),
-      }).then((r) => r.json());
-      await fetch(`${endpoints.API}/api/v1/reports/${id}/verify?decision=${decision}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${login.access_token}` },
-      });
-    } catch {
-      /* local state update */
+      const token = await ensureToken();
+      const res = await fetch(
+        `${endpoints.API}/api/v1/reports/${id}/verify?decision=${decision}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Bypass-Tunnel-Remainder": "true",
+          },
+        },
+      );
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        setVerifyError(`Verify failed (${res.status}): ${detail.detail ?? "unknown"}`);
+        return; // do NOT flip the card optimistically on failure
+      }
+      setVerifiedIds((prev) => ({ ...prev, [id]: decision }));
+    } catch (err) {
+      setVerifyError(`Verify failed: ${err instanceof Error ? err.message : "network error"}`);
     }
   };
 
@@ -377,6 +413,12 @@ function ReportsInbox() {
           Every field report photo is pre-screened using deep feature classification (soil scarp edge energy, tension fracture width, vegetation loss) and EXIF GPS provenance checks before reaching the District Collector.
         </p>
       </div>
+
+      {verifyError && (
+        <div className="rounded-lg border border-red-800/60 bg-red-950/40 px-4 py-2 text-xs font-semibold text-red-300">
+          {verifyError}
+        </div>
+      )}
 
       {reports.map((r, i) => {
         const status = verifiedIds[r.id] || r.status || "pending";
@@ -400,9 +442,17 @@ function ReportsInbox() {
                     {r.description || "Fresh slope tension cracks & loose soil movement reported by field team."}
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[11px] text-slate-400">
-                    <span>📍 Lat: <b>{r.lat ? Number(r.lat).toFixed(4) : "24.8812"}</b>, Lon: <b>{r.lon ? Number(r.lon).toFixed(4) : "93.7235"}</b></span>
+                    <span>📍 Lat: <b>{r.lat != null ? Number(r.lat).toFixed(4) : "n/a"}</b>, Lon: <b>{r.lon != null ? Number(r.lon).toFixed(4) : "n/a"}</b></span>
                     <span>DUPs Merged: <b>{r.dup_count || 0}</b></span>
-                    <span className="text-emerald-400 font-semibold">✓ EXIF Geo-Match Verified</span>
+                    {r.exif_geo_ok === true && (
+                      <span className="text-emerald-400 font-semibold">✓ EXIF Geo-Match Verified</span>
+                    )}
+                    {r.exif_geo_ok === false && (
+                      <span className="text-amber-400 font-semibold">⚠ EXIF GPS mismatch</span>
+                    )}
+                    {r.exif_geo_ok == null && (
+                      <span className="text-slate-500">EXIF geo not checked</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -435,19 +485,43 @@ function ReportsInbox() {
               </div>
             </div>
 
-            <div className="mt-3.5 rounded-lg border border-white/10 bg-black/50 p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-orange-400">
-                  Model V AI Verdict: POSITIVE (94.2% Confidence)
-                </span>
-                <span className="text-[10px] text-emerald-400 font-bold">
-                  ✓ Fresh Scarp &amp; Tension Fracture Detected
+            {r.ai_analysis ? (
+              <div className="mt-3.5 rounded-lg border border-white/10 bg-black/50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-orange-400">
+                    Model V AI Verdict:{" "}
+                    <span className={cn(
+                      r.ai_analysis.verdict === "POSITIVE"
+                        ? "text-emerald-400"
+                        : r.ai_analysis.verdict === "POSSIBLE"
+                          ? "text-amber-400"
+                          : "text-slate-400",
+                    )}>
+                      {r.ai_analysis.verdict} ({Math.round((r.ai_analysis.probability ?? 0) * 100)}% confidence)
+                    </span>
+                  </span>
+                  {(r.ai_analysis.flags ?? []).length > 0 && (
+                    <span className="text-[10px] text-amber-400 font-bold">
+                      ⚠ {r.ai_analysis.flags.join(" · ")}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[11px] text-slate-300">
+                  {r.ai_analysis.gps_mismatch_m != null
+                    ? `EXIF GPS delta ${r.ai_analysis.gps_mismatch_m} m · `
+                    : "No EXIF GPS in image · "}
+                  {r.ai_analysis.signature
+                    ? `fresh-soil ${(r.ai_analysis.signature.fresh_soil_frac * 100).toFixed(1)}% · scarp-edge energy ${(r.ai_analysis.signature.horizontal_edge_energy ?? 0).toFixed(2)}`
+                    : "pixel signature unavailable"}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3.5 rounded-lg border border-dashed border-white/10 bg-black/30 p-3">
+                <span className="text-[11px] text-slate-500">
+                  No photo analysis attached to this report (photo optional — verdict appears here when a Model V pre-screen runs on the device).
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-300">
-                Pixel signature confirms structural slope shear displacement. EXIF timestamp matches observation window (0m GPS delta).
-              </p>
-            </div>
+            )}
           </div>
         );
       })}

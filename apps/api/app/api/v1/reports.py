@@ -1,3 +1,4 @@
+import logging
 import math
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -11,6 +12,9 @@ from app.api.deps import OPS_ROLES, STAFF_ROLES, get_current_user, require_roles
 from app.db.session import get_db
 from app.models import CitizenReport, Role, User
 from app.schemas.schemas import ReportIn, ReportOut, SyncBatchIn, SyncBatchOut
+from app.services.risk_engine import publish_live
+
+log = logging.getLogger("bhrakshak.reports")
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -66,38 +70,79 @@ async def sync_reports(
 ):
     """Idempotent offline sync: upsert by client UUID; duplicates merged.
 
-    Replay-safety is the contract the field PWA depends on (it retries on
-    every 'online' event): a batch replayed with the same client UUIDs must
-    be accepted=0, synced, and must not duplicate — in the DB or in the
-    AI-Inbox mirror below.
+    Two contracts the field clients depend on:
+    * Replay-safety (PWA retries on every 'online' event): a batch replayed
+      with the same client UUIDs is accepted=0 + synced, and never
+      duplicates — in the DB or in the AI-Inbox demo mirror.
+    * Honesty: `accepted` only counts reports that actually persisted (or
+      were deduped/merged). A failed DB write is reported in `rejected_ids`
+      and logged, never silently swallowed — the mobile client must be able
+      to trust the response before dropping its queued rows.
     """
-    accepted, merged, flagged, synced = 0, 0, 0, []
+    accepted, merged, flagged = 0, 0, 0
+    synced: list[str] = []
+    rejected: list[str] = []
+    last_error: str | None = None
+
     for item in batch.reports:
-        exists = await db.get(CitizenReport, item.client_id)
-        if exists is not None:
+        try:
+            # 1. Replay: same client UUID already persisted -> idempotent no-op.
+            exists = await db.get(CitizenReport, item.client_id)
+            if exists is not None:
+                synced.append(item.client_id)
+                continue
+            # 2. Proximity dedupe: <50m, <1h, same category -> merge.
+            dup = await _find_duplicate(db, item.lat, item.lon, item.category)
+            if dup is not None:
+                dup.dup_count = (dup.dup_count or 0) + 1
+                await db.commit()
+                merged += 1
+                synced.append(item.client_id)
+                await publish_live("report", {
+                    "id": str(dup.id),
+                    "category": dup.category,
+                    "dup_count": dup.dup_count,
+                    "merged": True,
+                })
+                continue
+            # 3. New report: persist, mirror for the demo fallback, broadcast.
+            flagged_flag = item.exif_geo_ok is False
+            flagged += int(flagged_flag)
+            out = await _upsert_report(db, item, user, sync_batch=batch.batch_id)
+            accepted += 1
             synced.append(item.client_id)
-            continue
-        dup = await _find_duplicate(db, item.lat, item.lon, item.category)
-        if dup is not None:
-            dup.dup_count += 1
-            merged += 1
-            synced.append(item.client_id)
-            continue
-        flagged_flag = item.exif_geo_ok is False
-        flagged += int(flagged_flag)
-        out = await _upsert_report(db, item, user, sync_batch=batch.batch_id)
-        accepted += 1
-        synced.append(item.client_id)
-        # AI-Inbox demo mirror: only when the DB row really is new, and only
-        # once per id so replays never grow the mirror.
-        if not any(r.id == out.id for r in DEMO_REPORTS):
-            DEMO_REPORTS.insert(0, out)
+            # AI-Inbox demo mirror: only when the DB row really is new, and
+            # only once per id so replays never grow the mirror.
+            if not any(r.id == out.id for r in DEMO_REPORTS):
+                DEMO_REPORTS.insert(0, out)
+            await publish_live("report", {
+                "id": str(out.id),
+                "category": out.category,
+                "description": out.description,
+                "lat": out.lat,
+                "lon": out.lon,
+                "status": out.status,
+                "merged": False,
+            })
+        except Exception as exc:  # surface, don't swallow
+            rejected.append(item.client_id)
+            last_error = str(exc)
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    if rejected and last_error:
+        log.warning("reports/sync: %d/%d rejected, last error: %s",
+                    len(rejected), len(batch.reports), last_error)
+
     return SyncBatchOut(
         batch_id=batch.batch_id,
         accepted=accepted,
         duplicates_merged=merged,
         flagged=flagged,
         synced_ids=synced,
+        rejected_ids=rejected,
     )
 
 
@@ -209,8 +254,6 @@ async def analyze_photo(
     the report's ai_analysis when the report is later synced with the same
     media.
     """
-    import uuid as _uuid
-
     from app.services.geoverify import classify_photo
 
     data = await photo.read()
