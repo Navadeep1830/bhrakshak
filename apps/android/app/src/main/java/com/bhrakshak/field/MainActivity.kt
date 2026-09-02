@@ -180,10 +180,16 @@ class MainActivity : AppCompatActivity() {
             text = "Rakshak — Field (SIH26001)"
             setTextColor(0xFFFB923C.toInt()); textSize = 22f
         })
+        val defaultUrl = "https://weak-guests-rule.loca.lt"
+        var storedUrl = prefs.getString("server_url", defaultUrl) ?: defaultUrl
+        if (storedUrl.contains("10.0.2.2") || storedUrl.contains("10.63.")) {
+            storedUrl = defaultUrl
+            prefs.edit().putString("server_url", defaultUrl).apply()
+        }
         val server = EditText(this).apply {
-            hint = "server url (https://weak-guests-rule.loca.lt)"
+            hint = "server url ($defaultUrl)"
             setSingleLine()
-            setText(prefs.getString("server_url", "https://weak-guests-rule.loca.lt"))
+            setText(storedUrl)
         }
         root.addView(server)
         root.addView(label("Public Cloud Tunnel or LAN IP (http://10.68.3.168:8000)"))
@@ -199,18 +205,17 @@ class MainActivity : AppCompatActivity() {
                 return@button
             }
 
-            val newUrl = server.text.toString().trim()
-            if (newUrl.isNotEmpty() && newUrl != ApiConfig.baseUrl) {
-                ApiConfig.setUrl(newUrl)
-                Api.rebuild()
-                prefs.edit().putString("server_url", ApiConfig.baseUrl).apply()
-            }
+            val inputUrl = server.text.toString().trim()
+            val targetUrl = if (inputUrl.isNotEmpty()) inputUrl else defaultUrl
+            ApiConfig.setUrl(targetUrl)
+            Api.rebuild()
+            prefs.edit().putString("server_url", targetUrl).apply()
 
             // Set visual loading state
             loginBtn.isEnabled = false
             loginBtn.text = "CONNECTING TO SERVER..."
             loginBtn.alpha = 0.7f
-            Toast.makeText(this@MainActivity, "Connecting to ${ApiConfig.baseUrl}...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@MainActivity, "Connecting to $targetUrl...", Toast.LENGTH_SHORT).show()
 
             lifecycleScope.launch {
                 try {

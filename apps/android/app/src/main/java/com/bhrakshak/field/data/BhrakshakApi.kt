@@ -256,7 +256,14 @@ object Api {
     private fun buildClient(): OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
-        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
+        .addInterceptor { chain ->
+            val req = chain.request().newBuilder()
+                .header("Bypass-Tunnel-Remainder", "true")
+                .header("User-Agent", "BhuRakshak-AndroidApp/1.0")
+                .build()
+            chain.proceed(req)
+        }
+        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
         .build()
 
     val wsClient: OkHttpClient = OkHttpClient.Builder()
