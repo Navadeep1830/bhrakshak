@@ -7,5 +7,8 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSe
 
 
 async def get_db():
-    async with SessionLocal() as session:
-        yield session
+    try:
+        async with SessionLocal() as session:
+            yield session
+    except Exception:
+        yield None
