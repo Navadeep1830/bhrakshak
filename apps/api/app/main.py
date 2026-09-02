@@ -65,6 +65,14 @@ for r in (auth.router, zones.router, reports.router, alerts.router, roads.router
 app.include_router(ws.router)  # websocket at /ws/live
 
 
+from fastapi.responses import FileResponse, JSONResponse
+
+@app.get("/download/apk", tags=["ops"])
+async def download_apk():
+    apk_path = "/home/sudpy/Landslide Proto/bhrakshak/bhrakshak-field-latest.apk"
+    return FileResponse(apk_path, media_type="application/vnd.android.package-archive", filename="bhrakshak-field-latest.apk")
+
+
 @app.get("/health", tags=["ops"])
 async def health():
     return {"status": "ok", "service": "bhrakshak-api", "demo_mode": settings.demo_mode}
