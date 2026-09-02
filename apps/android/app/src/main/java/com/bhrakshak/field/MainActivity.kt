@@ -111,6 +111,7 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------------ lifecycle
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 64, 48, 48)
@@ -180,12 +181,12 @@ class MainActivity : AppCompatActivity() {
             setTextColor(0xFFFB923C.toInt()); textSize = 22f
         })
         val server = EditText(this).apply {
-            hint = "server url (http://192.168.x.x:8000)"
+            hint = "server url (https://weak-guests-rule.loca.lt)"
             setSingleLine()
-            setText(prefs.getString("server_url", ApiConfig.baseUrl))
+            setText(prefs.getString("server_url", "https://weak-guests-rule.loca.lt"))
         }
         root.addView(server)
-        root.addView(label("Emulator keeps the default. On your phone use your PC's LAN IP — same WiFi."))
+        root.addView(label("Public Cloud Tunnel or LAN IP (http://10.68.3.168:8000)"))
         val email = EditText(this).apply { hint = "email"; setSingleLine() }
         val pw = EditText(this).apply { hint = "password"; inputType = 0x81 }
         root.addView(email); root.addView(pw)
