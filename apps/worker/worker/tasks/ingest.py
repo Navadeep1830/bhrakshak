@@ -65,7 +65,6 @@ async def _poll_all() -> int:
                     func.count().label("n_zones"),
                     func.avg(gfunc.ST_Y(gfunc.ST_Centroid(Zone.geom))).label("lat"),
                     func.avg(gfunc.ST_X(gfunc.ST_Centroid(Zone.geom))).label("lon"),
-                    func.min(Zone.id).label("zone_id"),
                 )
                 .group_by(Zone.district)
             )
@@ -80,7 +79,7 @@ async def _poll_all() -> int:
                 return district, await _fetch_open_meteo(float(lat_f), float(lon_f))
 
         results = await asyncio.gather(
-            *(_fetch_for(d, lat, lon) for d, _n, lat, lon, _z in zone_rows),
+            *(_fetch_for(d, lat, lon) for d, _n, lat, lon in zone_rows),
             return_exceptions=True,
         )
 
