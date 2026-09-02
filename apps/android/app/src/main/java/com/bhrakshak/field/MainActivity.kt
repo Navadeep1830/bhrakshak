@@ -29,6 +29,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.*
 import com.google.android.gms.location.LocationServices
 import com.bhrakshak.field.data.Api
 import com.bhrakshak.field.data.ApiConfig
@@ -83,6 +84,7 @@ class MainActivity : AppCompatActivity() {
     private var lastZones: List<ZoneOut> = emptyList()
     private var pendingPhotoFile: File? = null
     private var pendingPhotoPath: String? = null
+    private var chatJob: Job? = null
 
     private val prefs by lazy { getSharedPreferences("bhrakshak_cache", Context.MODE_PRIVATE) }
 
@@ -248,6 +250,7 @@ class MainActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------ home
     private fun showHome() {
+        chatJob?.cancel(); chatJob = null
         root.removeAllViews()
         val email = TokenStore.email(this) ?: "user"
         root.addView(title("BhuRakshak Field"))
@@ -626,67 +629,68 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun showChatScreen() {
-        val chatStatus = withContext(Dispatchers.Main) {
-            root.removeAllViews()
-            root.addView(title("FIELD EMERGENCY CHAT"))
-            root.addView(label("Direct 2-way live messaging with DC Command Center (HQ)"))
-            
-            val msgBox = mono("loading messages…", 13f)
-            root.addView(msgBox)
-            
-            val inputEdit = EditText(this@MainActivity).apply {
-                hint = "Type message to Command Center..."
-                setSingleLine()
-            }
-            root.addView(inputEdit)
-            
-            val email = TokenStore.email(this@MainActivity) ?: "Field Responder"
-            val locName = when {
-                lastLat == 24.88 -> "Tupul Station Yard (Noney)"
-                lastLat == 25.27 -> "Cherrapunji Cut-Slope (EKH)"
-                lastLat == 23.73 -> "Aizawl North Slope"
-                lastLat == 27.33 -> "Gangtok Highway Sector"
-                else -> "Field Location"
-            }
-            
-            root.addView(button("SEND TO COMMAND CENTER", 0xFFEA580C.toInt()) {
-                val txt = inputEdit.text.toString().trim()
-                if (txt.isNotEmpty()) {
-                    lifecycleScope.launch {
-                        try {
-                            Api.service.sendChatMessage(
-                                com.bhrakshak.field.data.ChatMessageIn(
-                                    senderName = email,
-                                    location = locName,
-                                    message = txt,
-                                    role = "field_responder",
-                                )
-                            )
-                            inputEdit.setText("")
-                            Toast.makeText(this@MainActivity, "Message Sent to PC Command Center ✓", Toast.LENGTH_SHORT).show()
-                            showChatScreen()
-                        } catch (e: Exception) {
-                            Toast.makeText(this@MainActivity, "Send failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-            })
-            root.addView(button("Back", 0xFF334155.toInt()) { showHome() })
-            msgBox
+    private fun showChatScreen() {
+        chatJob?.cancel()
+        root.removeAllViews()
+        root.addView(title("FIELD EMERGENCY CHAT"))
+        root.addView(label("Direct 2-way live messaging with DC Command Center (HQ)"))
+        
+        val msgBox = mono("loading live chat stream…", 13f)
+        root.addView(msgBox)
+        
+        val inputEdit = EditText(this@MainActivity).apply {
+            hint = "Type message to Command Center..."
+            setSingleLine()
+        }
+        root.addView(inputEdit)
+        
+        val email = TokenStore.email(this@MainActivity) ?: "Field Responder"
+        val locName = when {
+            lastLat == 24.88 -> "Tupul Station Yard (Noney)"
+            lastLat == 25.27 -> "Cherrapunji Cut-Slope (EKH)"
+            lastLat == 23.73 -> "Aizawl North Slope"
+            lastLat == 27.33 -> "Gangtok Highway Sector"
+            else -> "Field Location"
         }
         
-        try {
-            val msgs = Api.service.chatMessages()
-            withContext(Dispatchers.Main) {
-                chatStatus.text = if (msgs.isEmpty()) "No chat messages yet."
-                else msgs.joinToString("\n\n") { m ->
-                    "👤 ${m.senderName} (${m.location})\n💬 ${m.message}\n⏰ ${m.timestamp.take(19).replace('T', ' ')}"
+        root.addView(button("SEND TO COMMAND CENTER", 0xFFEA580C.toInt()) {
+            val txt = inputEdit.text.toString().trim()
+            if (txt.isNotEmpty()) {
+                lifecycleScope.launch {
+                    try {
+                        Api.service.sendChatMessage(
+                            com.bhrakshak.field.data.ChatMessageIn(
+                                senderName = email,
+                                location = locName,
+                                message = txt,
+                                role = "field_responder",
+                            )
+                        )
+                        inputEdit.setText("")
+                        Toast.makeText(this@MainActivity, "Message Sent to PC Command Center ✓", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(this@MainActivity, "Send failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-        } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                chatStatus.text = "Chat history offline: ${e.message}"
+        })
+        root.addView(button("Back", 0xFF334155.toInt()) {
+            chatJob?.cancel(); chatJob = null
+            showHome()
+        })
+        
+        chatJob = lifecycleScope.launch {
+            while (isActive) {
+                try {
+                    val msgs = Api.service.chatMessages()
+                    msgBox.text = if (msgs.isEmpty()) "No chat messages yet."
+                    else msgs.joinToString("\n\n") { m ->
+                        "👤 ${m.senderName} (${m.location})\n💬 ${m.message}\n⏰ ${m.timestamp.take(19).replace('T', ' ')}"
+                    }
+                } catch (e: Exception) {
+                    msgBox.text = "Chat history offline: ${e.message}"
+                }
+                delay(2500)
             }
         }
     }

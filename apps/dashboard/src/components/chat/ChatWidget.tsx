@@ -25,13 +25,22 @@ export function ChatWidget() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Initial fetch
-    fetch(`${endpoints.API}/api/v1/chat/messages`, {
-      headers: { "Bypass-Tunnel-Remainder": "true" },
-    })
-      .then((r) => r.json())
-      .then((data) => Array.isArray(data) && setMessages(data.reverse()))
-      .catch(() => {});
+    const fetchMsgs = () => {
+      fetch(`${endpoints.API}/api/v1/chat/messages`, {
+        headers: { "Bypass-Tunnel-Remainder": "true" },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            const list = data.reverse();
+            setMessages(list);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchMsgs();
+    const interval = setInterval(fetchMsgs, 3000);
 
     // Live WebSocket listener
     let ws: WebSocket | null = null;
@@ -47,7 +56,7 @@ export function ChatWidget() {
         try {
           const data = JSON.parse(e.data);
           if (data.type === "chat_message") {
-            setMessages((prev) => [...prev, data]);
+            fetchMsgs();
             setUnread((u) => u + 1);
           }
         } catch {}
@@ -55,6 +64,7 @@ export function ChatWidget() {
     } catch {}
 
     return () => {
+      clearInterval(interval);
       ws?.close();
     };
   }, []);
