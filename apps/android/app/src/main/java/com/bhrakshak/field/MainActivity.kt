@@ -1,4 +1,4 @@
-﻿package com.bhrakshak.field
+package com.bhrakshak.field
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -149,21 +149,37 @@ class MainActivity : AppCompatActivity() {
         setPadding(0, 8, 0, 8)
     }
 
-    private fun button(text: String, bg: Int, onClick: () -> Unit): Button =
+    private fun button(text: String, bg: Int, onClick: (Button) -> Unit): Button =
         Button(this).apply {
             this.text = text
-            setBackgroundColor(bg)
+            val rippleColor = 0x40FFFFFF
+            val shape = android.graphics.drawable.GradientDrawable().apply {
+                setColor(bg)
+                cornerRadius = 16f
+            }
+            val mask = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFFFFFFFF.toInt())
+                cornerRadius = 16f
+            }
+            background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(rippleColor),
+                shape,
+                mask
+            )
             setTextColor(0xFFFFFFFF.toInt())
             setPadding(0, 28, 0, 28)
-            setOnClickListener { onClick() }
+            setOnClickListener { onClick(this) }
         }
+
+    private fun button(text: String, bg: Int, onClickSimple: () -> Unit): Button =
+        button(text, bg) { onClickSimple() }
 
     // ------------------------------------------------------------------ login
     private fun showLogin() {
         root.removeAllViews()
         root.addView(title("Bhu"))
         root.addView(TextView(this).apply {
-            text = "Rakshak â€” Field (SIH26001)"
+            text = "Rakshak — Field (SIH26001)"
             setTextColor(0xFFFB923C.toInt()); textSize = 22f
         })
         val server = EditText(this).apply {
@@ -172,32 +188,48 @@ class MainActivity : AppCompatActivity() {
             setText(prefs.getString("server_url", ApiConfig.baseUrl))
         }
         root.addView(server)
-        root.addView(label("Emulator keeps the default. On your phone use your PC's LAN IP (ipconfig) â€” same WiFi."))
+        root.addView(label("Emulator keeps the default. On your phone use your PC's LAN IP — same WiFi."))
         val email = EditText(this).apply { hint = "email"; setSingleLine() }
         val pw = EditText(this).apply { hint = "password"; inputType = 0x81 }
         root.addView(email); root.addView(pw)
-        root.addView(button("Login", 0xFFEA580C.toInt()) {
+        root.addView(button("LOGIN", 0xFFEA580C.toInt()) { btn ->
+            val em = email.text.toString().trim()
+            val pass = pw.text.toString()
+            if (em.isEmpty() || pass.isEmpty()) {
+                Toast.makeText(this@MainActivity, "Please enter email & password", Toast.LENGTH_SHORT).show()
+                return@button
+            }
+
             val newUrl = server.text.toString().trim()
             if (newUrl.isNotEmpty() && newUrl != ApiConfig.baseUrl) {
                 ApiConfig.setUrl(newUrl)
                 Api.rebuild()
                 prefs.edit().putString("server_url", ApiConfig.baseUrl).apply()
             }
+
+            // Set visual loading state
+            btn.isEnabled = false
+            btn.text = "CONNECTING TO SERVER..."
+            btn.alpha = 0.7f
+            Toast.makeText(this@MainActivity, "Connecting to ${ApiConfig.baseUrl}...", Toast.LENGTH_SHORT).show()
+
             lifecycleScope.launch {
                 try {
-                    val out = Api.service.login(
-                        LoginIn(email.text.toString().trim(), pw.text.toString()),
-                    )
-                    TokenStore.save(this@MainActivity, out.accessToken, out.refreshToken, email.text.toString().trim())
+                    val out = Api.service.login(LoginIn(em, pass))
+                    TokenStore.save(this@MainActivity, out.accessToken, out.refreshToken, em)
                     SyncWorker.schedule(this@MainActivity)
                     LiveAlertService.start(this@MainActivity)
                     showHome()
                 } catch (e: Exception) {
-                    Toast.makeText(this@MainActivity, "Login failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    btn.isEnabled = true
+                    btn.text = "LOGIN"
+                    btn.alpha = 1.0f
+                    val cause = e.localizedMessage ?: e.message ?: "Server unreachable"
+                    Toast.makeText(this@MainActivity, "Login Failed: $cause\nCheck server URL & Wi-Fi connection.", Toast.LENGTH_LONG).show()
                 }
             }
         })
-        root.addView(label("Demo: citizen@bhrakshak.in / Citizen@123 Â· field.noney@bhrakshak.in / Field@123"))
+        root.addView(label("Demo: citizen@bhrakshak.in / Citizen@123 · field.noney@bhrakshak.in / Field@123"))
     }
 
     // ------------------------------------------------------------------ home
