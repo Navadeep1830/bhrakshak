@@ -1,5 +1,6 @@
 # Android
 *.apk
+!bhrakshak-field-latest.apk
 *.aab
 .gradle/
 build/
