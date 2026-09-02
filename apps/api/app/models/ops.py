@@ -142,3 +142,21 @@ class BleSighting(Base):
     mean_rssi: Mapped[float | None] = mapped_column(Float)
     # how many distinct reporter devices contributed this tick
     n_reporters: Mapped[int] = mapped_column(Integer, default=1)
+
+class SafeCheckin(Base):
+    """Citizen "I am safe" roll call.
+
+    Written by the public (login-free) endpoint so any phone — even one that
+    cannot complete a full account login on a dying 2G link — can tell the
+    district command center it is alive. Powers the missing-persons triage
+    view: people in L3/L4 zones with NO check-in are the search priority.
+    """
+
+    __tablename__ = "safe_checkins"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    geom: Mapped[object] = mapped_column(Geometry(geometry_type="POINT", srid=4326), nullable=True)
+    district: Mapped[str | None] = mapped_column(String(120), index=True)
+    device_hash: Mapped[str | None] = mapped_column(String(64))  # rotated id, not persistent identity
+    note: Mapped[str | None] = mapped_column(Text)

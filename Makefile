@@ -1,16 +1,17 @@
 SHELL := /bin/bash
 COMPOSE := docker compose -f infra/docker-compose.yml
 
-.PHONY: help up down logs migrate seed data demo test lint dev-api dev-dashboard dev-pwa nuke
+.PHONY: help up down logs migrate seed data demo test lint dev-api dev-dashboard dev-pwa dev-citizen nuke
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-up: ## Boot the entire platform (postgres+postgis+timescale, redis, mosquitto, minio, martin, api, worker, dashboard, pwa)
+up: ## Boot the entire platform (postgres+postgis+timescale, redis, mosquitto, minio, martin, api, worker, dashboard, pwa, citizen)
 	$(COMPOSE) up -d --build
 	@echo "== BhuRakshak =="
 	@echo "dashboard  http://localhost:3000"
 	@echo "field pwa  http://localhost:5173"
+	@echo "citizen    http://localhost:5174"
 	@echo "api docs   http://localhost:8000/docs"
 	@echo "tiles      http://localhost:3001/zones/7/60/30.pbf"
 
@@ -63,3 +64,6 @@ dev-dashboard:
 
 dev-pwa:
 	cd apps/field-pwa && npm run dev
+
+dev-citizen:
+	cd apps/citizen-pwa && npm run dev

@@ -1,6 +1,6 @@
 from app.models.base import Base, I18nMessage, ModelRegistry, RefreshToken, Role, SeismicEvent, SensorReading, User
 from app.models.geo import RainfallObs, RiskCell, RiskSnapshot, Zone
-from app.models.ops import Alert, BleSighting, CitizenReport, DisplacementPoint, DisplacementSeries, RoadStatus, Shelter
+from app.models.ops import Alert, BleSighting, CitizenReport, DisplacementPoint, DisplacementSeries, RoadStatus, SafeCheckin, Shelter
 
 __all__ = [
     "Base",
@@ -22,4 +22,5 @@ __all__ = [
     "DisplacementSeries",
     "Shelter",
     "BleSighting",
+    "SafeCheckin",
 ]

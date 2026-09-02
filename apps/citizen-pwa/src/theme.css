@@ -1,0 +1,176 @@
+/* BhuRakshak Field — Material Design 3 inspired tokens (dark) */
+:root {
+  color-scheme: dark;
+
+  /* md3 palette: deep terrain blue with monsoon orange primary */
+  --md-primary: #f97316;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #4a2508;
+  --md-on-primary-container: #ffdcc2;
+  --md-secondary: #38bdf8;
+  --md-on-secondary: #04283a;
+  --md-tertiary: #34d399;
+  --md-error: #f87171;
+  --md-on-error: #450a0a;
+
+  --md-surface: #0b1220;
+  --md-surface-1: #111a2c;
+  --md-surface-2: #16213a;
+  --md-surface-3: #1c2942;
+  --md-surface-4: #243352;
+  --md-outline: #2c3b58;
+  --md-outline-variant: #1e293b;
+  --md-on-surface: #e2e8f0;
+  --md-on-surface-variant: #94a3b8;
+
+  --md-elev-1: 0 1px 2px rgba(0,0,0,.4), 0 1px 3px 1px rgba(0,0,0,.25);
+  --md-elev-2: 0 1px 2px rgba(0,0,0,.5), 0 2px 6px 2px rgba(0,0,0,.3);
+  --md-elev-3: 0 4px 8px 3px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.4);
+
+  --md-radius-s: 8px;
+  --md-radius-m: 12px;
+  --md-radius-l: 16px;
+  --md-radius-xl: 28px;
+
+  --md-state-pct: 0.08;
+}
+
+* { font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif; box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--md-surface); color: var(--md-on-surface); }
+body { min-height: 100dvh; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+
+::selection { background: rgba(249,115,22,.35); }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--md-outline); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- state layers (md ripple-ish hover/press) ---------- */
+.md-pressable { position: relative; overflow: hidden; transition: background-color .15s ease, box-shadow .2s ease, transform .12s ease; }
+.md-pressable::after {
+  content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+  transition: opacity .15s ease; pointer-events: none;
+}
+.md-pressable:hover::after { opacity: var(--md-state-pct); }
+.md-pressable:active::after { opacity: calc(var(--md-state-pct) * 2); }
+.md-pressable:active { transform: scale(.985); }
+
+/* ---------- app bar ---------- */
+.md-appbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px calc(10px - 2px);
+  background: color-mix(in srgb, var(--md-surface-1) 88%, transparent);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.md-appbar-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.md-appbar-sub { font-size: 11px; color: var(--md-on-surface-variant); margin-top: 1px; }
+
+/* ---------- cards ---------- */
+.md-card {
+  background: var(--md-surface-1);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-radius-l);
+  box-shadow: var(--md-elev-1);
+  padding: 16px;
+}
+.md-card-elevated { box-shadow: var(--md-elev-2); background: var(--md-surface-2); }
+.md-card-title { font-size: 15px; font-weight: 700; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.md-card-title .md-ico { color: var(--md-primary); }
+
+/* ---------- buttons ---------- */
+.md-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: none; cursor: pointer; font-weight: 700; font-size: 14px;
+  border-radius: 999px; padding: 10px 20px;
+  transition: box-shadow .2s ease, transform .12s ease, background-color .15s ease;
+}
+.md-btn:disabled { opacity: .45; cursor: not-allowed; }
+.md-btn-filled { background: var(--md-primary); color: var(--md-on-primary); box-shadow: var(--md-elev-1); }
+.md-btn-filled:hover:not(:disabled) { box-shadow: var(--md-elev-2); }
+.md-btn-tonal { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.md-btn-outline { background: transparent; color: var(--md-primary); border: 1px solid var(--md-outline); }
+.md-btn-danger { background: color-mix(in srgb, var(--md-error) 18%, transparent); color: var(--md-error); border: 1px solid color-mix(in srgb, var(--md-error) 45%, transparent); }
+.md-btn-block { width: 100%; }
+.md-btn-lg { padding: 15px 22px; font-size: 16px; border-radius: var(--md-radius-m); }
+
+/* ---------- chips / filter chips ---------- */
+.md-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600;
+  background: var(--md-surface-2); color: var(--md-on-surface-variant);
+  border: 1px solid var(--md-outline-variant); cursor: pointer;
+  transition: all .15s ease;
+}
+.md-chip-selected { background: var(--md-secondary-container, rgba(249,115,22,.18)); color: var(--md-primary); border-color: var(--md-primary); }
+
+/* ---------- text inputs ---------- */
+.md-input {
+  width: 100%; background: var(--md-surface-2); color: var(--md-on-surface);
+  border: 1px solid var(--md-outline); border-radius: var(--md-radius-s);
+  padding: 10px 12px; font-size: 14px; outline: none;
+  transition: border-color .15s ease;
+}
+.md-input:focus { border-color: var(--md-primary); }
+.md-input::placeholder { color: var(--md-on-surface-variant); }
+
+/* ---------- snackbar ---------- */
+.md-snackbar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 88px;
+  background: var(--md-surface-4); color: var(--md-on-surface);
+  border: 1px solid var(--md-outline); border-radius: var(--md-radius-s);
+  box-shadow: var(--md-elev-3); padding: 12px 18px; font-size: 13.5px;
+  z-index: 90; max-width: min(92vw, 420px);
+  animation: snackbar-in .25s cubic-bezier(.2,.9,.3,1.2);
+}
+@keyframes snackbar-in { from { opacity: 0; transform: translate(-50%, 14px); } }
+
+/* ---------- FAB ---------- */
+.md-fab {
+  position: fixed; right: 16px; bottom: 76px; z-index: 50;
+  width: 56px; height: 56px; border-radius: 18px; border: none; cursor: pointer;
+  background: var(--md-primary-container); color: var(--md-on-primary-container);
+  box-shadow: var(--md-elev-3); display: grid; place-items: center;
+  transition: transform .15s ease;
+}
+.md-fab:active { transform: scale(.92); }
+
+/* ---------- badges / meters ---------- */
+.md-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  border-radius: 999px; padding: 3px 9px;
+}
+.md-meter { height: 8px; border-radius: 999px; background: var(--md-surface-3); overflow: hidden; }
+.md-meter > div { height: 100%; border-radius: 999px; transition: width .6s cubic-bezier(.3,1,.4,1); }
+
+/* level colours shared with dashboard */
+.lvl-0 { color: #34d399; } .lvl-0-bg { background: #34d399; }
+.lvl-1 { color: #a3e635; } .lvl-1-bg { background: #a3e635; }
+.lvl-2 { color: #facc15; } .lvl-2-bg { background: #facc15; }
+.lvl-3 { color: #fb923c; } .lvl-3-bg { background: #fb923c; }
+.lvl-4 { color: #f87171; } .lvl-4-bg { background: #f87171; }
+
+/* ---------- entrance animations ---------- */
+@keyframes md-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.md-rise { animation: md-rise .5s cubic-bezier(.16,1,.3,1) both; }
+@keyframes md-pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.md-pulse { animation: md-pulse-dot 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .md-rise, .md-pulse { animation: none !important; } }
+
+/* ---------- bottom nav ---------- */
+.md-bottomnav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: flex; justify-content: space-around;
+  background: color-mix(in srgb, var(--md-surface-1) 92%, transparent);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--md-outline-variant);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+}
+.md-navitem {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  border: none; background: transparent; color: var(--md-on-surface-variant);
+  font-size: 10.5px; font-weight: 700; cursor: pointer; padding: 6px 14px; border-radius: var(--md-radius-m);
+  transition: color .15s ease, background .15s ease;
+}
+.md-navitem-active { color: var(--md-primary); background: rgba(249,115,22,.12); }
