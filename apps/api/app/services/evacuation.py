@@ -100,8 +100,8 @@ def build_hazard_field(
     for z in zone_rows:
         lvl = float(z.get("hazard_level") or 0)
         susc = float(z.get("susc_mean") or 40)
-        zlat = z["centroid_lat"]
-        zlon = z["centroid_lon"]
+        zlat = float(z.get("centroid_lat") or z.get("center_lat") or z.get("lat") or 0.0)
+        zlon = float(z.get("centroid_lon") or z.get("center_lon") or z.get("lon") or 0.0)
         radius = float(z.get("radius_km") or 3.0)
         # danger = fused level dominates, susceptibility shapes the tail
         danger = min(1.0, (lvl / 4.0) * 0.75 + (susc / 100.0) * 0.25)

@@ -364,17 +364,22 @@ class AIIncidentCommander:
     def coordinate_incident(
         self,
         report_text: str,
-        user_lat: float,
-        user_lon: float,
+        user_lat: float | None = None,
+        user_lon: float | None = None,
         district: str = "Noney",
         incident_sector: str = "Tupul Railway Corridor KM 8.2",
+        incident_lat: float | None = None,
+        incident_lon: float | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Executes full autonomous multi-agent incident command pipeline."""
+        lat = user_lat if user_lat is not None else (incident_lat if incident_lat is not None else 25.10)
+        lon = user_lon if user_lon is not None else (incident_lon if incident_lon is not None else 93.70)
         # 1. Triage
-        triage_res = self.triage_agent.triage_report(report_text, user_lat, user_lon)
+        triage_res = self.triage_agent.triage_report(report_text, lat, lon)
 
         # 2. Resource Allocation & Routing
-        alloc_res = self.allocation_agent.allocate_resources(triage_res, user_lat, user_lon, district)
+        alloc_res = self.allocation_agent.allocate_resources(triage_res, lat, lon, district)
 
         # 3. Official Bilingual DDMA Action Order
         order_res = self.order_agent.draft_order(triage_res, alloc_res, incident_sector, district)

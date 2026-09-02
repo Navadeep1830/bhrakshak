@@ -1,48 +1,85 @@
 {
-  "generated_by": "ml/models/backtest.py",
-  "note": "SYNTHETIC placeholder - replace by running the real temporal backtest",
+  "generated_by": "ml/models/hazard_nowcast.py (LODO cross-validation on real Open-Meteo weather × NASA GLC labels)",
+  "note": "Real metrics from trained pipeline — event-day median percentile scoring with operational alert budgets",
+  "source_artifact": "ml/artifacts/hazard_nowcast_metrics.json",
+  "evaluation_window": {
+    "catalogue_start": "2007-04-11",
+    "catalogue_end": "2017-07-10",
+    "n_events": 30,
+    "rationale": "days outside the label catalogue are unknown, not negative"
+  },
   "metrics": {
     "period": {
-      "train": "<=2019",
-      "val": "2020-2022",
-      "test": "2023-2024"
+      "method": "Leave-one-district-out (LODO) spatial cross-validation",
+      "districts": ["Aizawl", "East Khasi Hills", "Noney", "Imphal West", "Gangtok"],
+      "n_events": 30
     },
     "per_level": [
       {
+        "level": 1,
+        "name": "L1 Watch",
+        "alert_budget": 0.20,
+        "pod": 0.714,
+        "far": 0.993,
+        "csi": 0.007,
+        "bias": 96.643,
+        "tp": 10,
+        "fp": 1343,
+        "fn": 4,
+        "alert_days_per_year": 73.0,
+        "caveat": "High FAR is expected: L1 is a low-bar watch level designed for broad coverage, not precision"
+      },
+      {
         "level": 2,
-        "pod": 0.78,
-        "far": 0.31,
-        "csi": 0.58,
-        "bias": 1.13
+        "name": "L2 Alert",
+        "alert_budget": 0.10,
+        "pod": 0.571,
+        "far": 0.990,
+        "csi": 0.010,
+        "bias": 56.429,
+        "tp": 8,
+        "fp": 782,
+        "fn": 6,
+        "alert_days_per_year": 36.5
       },
       {
         "level": 3,
-        "pod": 0.71,
-        "far": 0.24,
-        "csi": 0.58,
-        "bias": 0.93
+        "name": "L3 Warning",
+        "alert_budget": 0.03,
+        "pod": 0.357,
+        "far": 0.985,
+        "csi": 0.015,
+        "bias": 23.571,
+        "tp": 5,
+        "fp": 325,
+        "fn": 9,
+        "alert_days_per_year": 11.0
       },
       {
         "level": 4,
-        "pod": 0.64,
-        "far": 0.18,
-        "csi": 0.56,
-        "bias": 0.78
+        "name": "L4 Emergency",
+        "alert_budget": 0.01,
+        "pod": 0.214,
+        "far": 0.978,
+        "csi": 0.020,
+        "bias": 9.929,
+        "tp": 3,
+        "fp": 136,
+        "fn": 11,
+        "alert_days_per_year": 3.7
       }
     ],
+    "model_selection": {
+      "rule": "one-standard-error: simplest candidate within 1 bootstrap SE of the best out-of-fold event-day median percentile",
+      "champion": "logistic-physical",
+      "oof_median_percentile": 0.8753,
+      "oof_se": 0.0359,
+      "note": "Booster models did not beat the physical logistic under LODO; the physical model was selected for honesty"
+    },
     "lead_time_h": {
-      "median": 31.1,
-      "p25": 22.8,
-      "p75": 39.9,
-      "histogram": [
-        2,
-        6,
-        48,
-        76,
-        52,
-        15,
-        1
-      ]
+      "note": "Estimated from threshold_tier on Tupul 2022 reconstructed rainfall",
+      "tupul_2022_lead_time_h": 36,
+      "first_l3_at": "T-36h before event"
     }
   },
   "events": {
@@ -55,20 +92,20 @@
         {
           "t_hours": -72,
           "rain_24h_mm": 42,
-          "level": 0,
-          "note": "monsoon background"
+          "level": 1,
+          "note": "monsoon intensifying — L1 Watch triggered"
         },
         {
           "t_hours": -48,
           "rain_24h_mm": 96,
-          "level": 1,
-          "note": "antecedent buildup"
+          "level": 2,
+          "note": "sustained heavy rain — L2 Alert"
         },
         {
           "t_hours": -36,
           "rain_24h_mm": 148,
           "level": 3,
-          "note": "SYSTEM HITS L3 WARNING - lead time anchor"
+          "note": "SYSTEM HITS L3 WARNING — lead time anchor"
         },
         {
           "t_hours": -24,

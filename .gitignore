@@ -18,6 +18,10 @@ __pycache__/
 # --- root housekeeping (never commit) ---
 .env
 node_modules/
+**/node_modules/
+apps/dashboard/node_modules
+apps/field-pwa/node_modules
+*.db
 .next/
 dist/
 __pycache__/
