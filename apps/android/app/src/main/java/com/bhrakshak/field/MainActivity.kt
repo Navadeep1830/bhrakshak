@@ -1,4 +1,4 @@
-﻿package com.bhrakshak.field
+package com.bhrakshak.field
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -111,6 +111,7 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------------ lifecycle
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 64, 48, 48)
@@ -120,7 +121,12 @@ class MainActivity : AppCompatActivity() {
         setContentView(scroll)
 
         restoreLastLocation()
-        prefs.getString("server_url", null)?.let { ApiConfig.setUrl(it) }
+        val defaultUrl = "https://weak-guests-rule.loca.lt"
+        val saved = prefs.getString("server_url", defaultUrl) ?: defaultUrl
+        val activeUrl = if (saved.startsWith("http://10.") || saved.startsWith("http://192.") || saved.contains("10.0.2.2")) defaultUrl else saved
+        ApiConfig.setUrl(activeUrl)
+        Api.rebuild()
+
         requestPermissionsIfNeeded()
         SyncWorker.schedule(this)
         registerConnectivityCallback()
@@ -152,7 +158,20 @@ class MainActivity : AppCompatActivity() {
     private fun button(text: String, bg: Int, onClick: () -> Unit): Button =
         Button(this).apply {
             this.text = text
-            setBackgroundColor(bg)
+            val rippleColor = 0x40FFFFFF
+            val shape = android.graphics.drawable.GradientDrawable().apply {
+                setColor(bg)
+                cornerRadius = 16f
+            }
+            val mask = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFFFFFFFF.toInt())
+                cornerRadius = 16f
+            }
+            background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(rippleColor),
+                shape,
+                mask
+            )
             setTextColor(0xFFFFFFFF.toInt())
             setPadding(0, 28, 0, 28)
             setOnClickListener { onClick() }
@@ -163,41 +182,66 @@ class MainActivity : AppCompatActivity() {
         root.removeAllViews()
         root.addView(title("Bhu"))
         root.addView(TextView(this).apply {
-            text = "Rakshak â€” Field (SIH26001)"
+            text = "Rakshak — Field (SIH26001)"
             setTextColor(0xFFFB923C.toInt()); textSize = 22f
         })
+        val defaultUrl = "https://weak-guests-rule.loca.lt"
+        var storedUrl = prefs.getString("server_url", defaultUrl) ?: defaultUrl
+        if (storedUrl.startsWith("http://10.") || storedUrl.startsWith("http://192.") || storedUrl.contains("10.0.2.2")) {
+            storedUrl = defaultUrl
+            prefs.edit().putString("server_url", defaultUrl).apply()
+        }
+        ApiConfig.setUrl(storedUrl)
+        Api.rebuild()
         val server = EditText(this).apply {
-            hint = "server url (http://192.168.x.x:8000)"
+            hint = "server url ($defaultUrl)"
             setSingleLine()
-            setText(prefs.getString("server_url", ApiConfig.baseUrl))
+            setText(storedUrl)
         }
         root.addView(server)
-        root.addView(label("Emulator keeps the default. On your phone use your PC's LAN IP (ipconfig) â€” same WiFi."))
+        root.addView(label("Server connection (Public Cloud Tunnel or custom endpoint)"))
         val email = EditText(this).apply { hint = "email"; setSingleLine() }
         val pw = EditText(this).apply { hint = "password"; inputType = 0x81 }
         root.addView(email); root.addView(pw)
-        root.addView(button("Login", 0xFFEA580C.toInt()) {
-            val newUrl = server.text.toString().trim()
-            if (newUrl.isNotEmpty() && newUrl != ApiConfig.baseUrl) {
-                ApiConfig.setUrl(newUrl)
-                Api.rebuild()
-                prefs.edit().putString("server_url", ApiConfig.baseUrl).apply()
+        lateinit var loginBtn: Button
+        loginBtn = button("LOGIN", 0xFFEA580C.toInt()) {
+            val em = email.text.toString().trim()
+            val pass = pw.text.toString()
+            if (em.isEmpty() || pass.isEmpty()) {
+                Toast.makeText(this@MainActivity, "Please enter email & password", Toast.LENGTH_SHORT).show()
+                return@button
             }
+
+            val inputUrl = server.text.toString().trim()
+            val targetUrl = if (inputUrl.isNotEmpty()) inputUrl else defaultUrl
+            ApiConfig.setUrl(targetUrl)
+            Api.rebuild()
+            prefs.edit().putString("server_url", targetUrl).apply()
+
+            // Set visual loading state
+            loginBtn.isEnabled = false
+            loginBtn.text = "CONNECTING TO SERVER..."
+            loginBtn.alpha = 0.7f
+            Toast.makeText(this@MainActivity, "Connecting to $targetUrl...", Toast.LENGTH_SHORT).show()
+
             lifecycleScope.launch {
                 try {
-                    val out = Api.service.login(
-                        LoginIn(email.text.toString().trim(), pw.text.toString()),
-                    )
-                    TokenStore.save(this@MainActivity, out.accessToken, out.refreshToken, email.text.toString().trim())
+                    val out = Api.service.login(LoginIn(em, pass))
+                    TokenStore.save(this@MainActivity, out.accessToken, out.refreshToken, em)
                     SyncWorker.schedule(this@MainActivity)
                     LiveAlertService.start(this@MainActivity)
                     showHome()
                 } catch (e: Exception) {
-                    Toast.makeText(this@MainActivity, "Login failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    loginBtn.isEnabled = true
+                    loginBtn.text = "LOGIN"
+                    loginBtn.alpha = 1.0f
+                    val cause = e.localizedMessage ?: e.message ?: "Server unreachable"
+                    Toast.makeText(this@MainActivity, "Login Failed: $cause\nCheck server URL & Wi-Fi connection.", Toast.LENGTH_LONG).show()
                 }
             }
-        })
-        root.addView(label("Demo: citizen@bhrakshak.in / Citizen@123 Â· field.noney@bhrakshak.in / Field@123"))
+        }
+        root.addView(loginBtn)
+        root.addView(label("Demo: citizen@bhrakshak.in / Citizen@123 · field.noney@bhrakshak.in / Field@123"))
     }
 
     // ------------------------------------------------------------------ home
@@ -206,15 +250,19 @@ class MainActivity : AppCompatActivity() {
         val email = TokenStore.email(this) ?: "user"
         root.addView(title("BhuRakshak Field"))
         root.addView(label("Logged in as $email"))
-        LiveAlertService.start(this)
+        runCatching { LiveAlertService.start(this) }
 
         val riskNow = mono("", 16f)
         root.addView(riskNow)
         root.addView(button("Refresh risk at my location", 0xFF1E293B.toInt()) { refreshRisk(riskNow) })
-        root.addView(button("I'M SAFE â€” check in", 0xFF059669.toInt()) { safeCheckin() })
+        root.addView(button("I'M SAFE — check in", 0xFF059669.toInt()) { safeCheckin() })
         root.addView(button("SAFEST ROUTE (pathway model)", 0xFF0284C7.toInt()) { showSafeRoute() })
         root.addView(button("RAIN GAUGE (nearest zone)", 0xFF7C3AED.toInt()) { showRainGauge() })
         root.addView(button("ALERTS", 0xFFB45309.toInt()) { lifecycleScope.launch { showAlerts() } })
+        root.addView(button("LOGOUT", 0xFF991B1B.toInt()) {
+            TokenStore.clear(this)
+            showLogin()
+        })
 
         // report composer
         root.addView(title("Report a hazard"))

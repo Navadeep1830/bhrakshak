@@ -23,6 +23,7 @@ make seed        # 4 pilot districts -> ~5km hex-grid zones clipped to boundarie
 |---|---|
 | http://localhost:3000 | Command Center dashboard (MapLibre 3D + ECharts SHAP) |
 | http://localhost:5173 | Field PWA (offline reports, 8 languages) |
+| https://weak-guests-rule.loca.lt | Public Cloud Tunnel endpoint (Mobile App & Remote Clients) |
 | http://localhost:8000/docs | API (OpenAPI) |
 | http://localhost:3001/zones/8/60/28.pbf | Martin vector tiles |
 | http://localhost:5555 | Flower (Celery ops view) |
@@ -30,17 +31,37 @@ make seed        # 4 pilot districts -> ~5km hex-grid zones clipped to boundarie
 
 Demo logins: `admin@bhrakshak.in / Admin@123`, `citizen@bhrakshak.in / Citizen@123` (+ DC & field accounts seeded per district).
 
-## Demo flow (90 seconds)
+## 📱 Mobile App (Android & PWA)
 
-```bash
-make demo        # realistic seed + storm injection
-```
-or click **"⛈ Inject Monsoon Cell (Demo)"** on the dashboard bottom-left:
-zones escalate amber→red, alerts fire on the live ticker, SMS templates render
-in 8 languages (`/api/v1/alerts/preview-fire`), road flips to blocked.
+The mobile experience connects directly to the central FastAPI backend:
 
-Pilot districts: **Aizawl (MZ), East Khasi Hills (ML), Noney + Imphal West (MN),
-Gangtok (SK)** — zone codes like `ML-EKH-004`.
+- **Pre-compiled APK**: `/home/sudpy/Downloads/bhrakshak-field-latest.apk`
+- **Default Server URL**: `https://weak-guests-rule.loca.lt` (pre-configured)
+- **Field PWA**: http://localhost:5173 (Works in browser or "Add to Home Screen")
+
+### Mobile Features & Testing Flow
+1. **Login**: Enter `citizen@bhrakshak.in / Citizen@123`.
+2. **Offline-First Sync**: Disconnect Wi-Fi/4G; submit a hazard report or tap **"✅ I'M SAFE"**. Reports store in on-device SQLite (Room/Dexie). Reconnect internet: background worker flushes queued reports automatically.
+3. **AI Photo Pre-Screening**: Snap a ground crack or slope movement photo; local Model V AI pre-screens EXIF and image fissures.
+
+## 🏔️ Landslide Disaster Simulation
+
+Run full-fidelity landslide simulations locally or via the dashboard:
+
+1. **Interactive Pitch Replay (June 2022 Tupul Disaster)**:
+   ```bash
+   python demo/replay_tupul_disaster.py --standalone
+   ```
+   Replays 72-hour antecedent rainfall buildup, InSAR ground kinematics, and demonstrates the **36-hour automated evacuation warning window**.
+
+2. **Monsoon Storm Injection**:
+   ```bash
+   python demo/storm_injector.py --district "East Khasi Hills" --peak 60 --hours 3
+   ```
+   Or click **"⛈ Inject Monsoon Cell (Demo)"** on the dashboard bottom-left (`http://localhost:3000`):
+   zones escalate amber→red, alerts fire on live ticker, SMS templates render in 8 languages, and roads flip to blocked state.
+
+Pilot districts: **Aizawl (MZ), East Khasi Hills (ML), Noney + Imphal West (MN), Gangtok (SK)** — zone codes like `ML-EKH-004`.
 
 ## Layout
 
@@ -51,6 +72,7 @@ apps/worker    Celery beat: rainfall poll 15m · risk recompute 15m · seismic 1
                MQTT bridge for sensors/#  →  sensor_readings hypertable
 apps/dashboard Next.js 14 · TS · Tailwind · MapLibre GL · ECharts (SHAP waterfall)
 apps/field-pwa Vite PWA · Workbox offline · Dexie queue · idempotent batch sync
+apps/android   Native Android Kotlin app · Room offline queue · WorkManager sync
 ml/            ingest (dem/inventory/weather) · features · models A–E · backtest
                registry. Leave-one-district-out spatial CV. Offline synthetic mode.
 infra/         docker-compose · martin tile config · mosquitto · minio init

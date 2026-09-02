@@ -31,6 +31,11 @@ separate server, same JWT auth, same offline-first sync contract.
   key rides on the queued row and is sent as the report's `media_ref`, which
   is how the server attaches the AI verdict to the synced report.
 
+## Pre-built APK
+
+The latest assembled debug APK is saved at:
+`/home/sudpy/Downloads/bhrakshak-field-latest.apk`
+
 ## Build
 
 ```bash
@@ -42,15 +47,12 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 The gradle wrapper (8.7) + AGP 8.5.2 + Kotlin 2.0.20 + KSP (Room compiler)
 are pinned; JDK 17 required. `gradle.properties` enables AndroidX.
 
-Set the backend URL before building (defaults to the 10.0.2.2 emulator
-mapping of localhost:8000):
-
-```
-app/build.gradle.kts -> buildConfigField API_BASE_URL / WS_URL
+Backend URL defaults to the public cloud tunnel:
+```text
+https://weak-guests-rule.loca.lt
 ```
 
-For a real device on the same LAN use `http://<your-ip>:8000` and the matching
-`ws://<your-ip>:8000/ws/live`. CORS does not apply to native apps.
+You can repoint to a custom LAN IP (e.g. `http://10.68.3.168:8000`) or production domain directly on the login screen.
 
 ## Note on maps
 

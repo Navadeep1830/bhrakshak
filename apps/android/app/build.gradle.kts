@@ -15,9 +15,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        // 10.0.2.2 = host loopback from the emulator; override for devices
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000\"")
-        buildConfigField("String", "WS_URL", "\"ws://10.0.2.2:8000/ws/live\"")
+        // Default public cloud tunnel URL
+        buildConfigField("String", "API_BASE_URL", "\"https://weak-guests-rule.loca.lt\"")
+        buildConfigField("String", "WS_URL", "\"wss://weak-guests-rule.loca.lt/ws/live\"")
     }
 
     buildTypes {
