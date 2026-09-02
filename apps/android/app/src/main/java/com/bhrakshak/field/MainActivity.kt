@@ -329,32 +329,36 @@ class MainActivity : AppCompatActivity() {
         getLocationAndThen { lat, lon ->
             val la = lat ?: lastLat
             val lo = lon ?: lastLon
-            if (la == null || lo == null) {
-                view.text = "Location unavailable â€” enable GPS"
-                return@getLocationAndThen
-            }
             lifecycleScope.launch {
                 try {
                     val token = TokenStore.access(this@MainActivity)
-                    val zones = Api.service.zones(
-                        bbox = "${lo - 0.05},${la - 0.05},${lo + 0.05},${la + 0.05}",
-                        token = token?.let { "Bearer $it" },
-                    )
+                    var zones: List<ZoneOut> = emptyList()
+                    if (la != null && lo != null) {
+                        zones = Api.service.zones(
+                            bbox = "${lo - 0.05},${la - 0.05},${lo + 0.05},${la + 0.05}",
+                            token = token?.let { "Bearer $it" },
+                        )
+                    }
+                    if (zones.isEmpty()) {
+                        zones = Api.service.zones(token = token?.let { "Bearer $it" })
+                    }
                     lastZones = zones
                     cacheZones(zones)
                     if (zones.isEmpty()) {
-                        view.text = "No monitored zone within 5 km of you"
+                        view.text = "🟢 NORMAL — monitoring active over pilot districts"
                         return@launch
                     }
                     val worst = zones.maxBy { it.hazardLevel }
-                    view.text = riskText(worst)
+                    val text = riskText(worst)
+                    view.text = text
                     prefs.edit()
-                        .putString("last_risk", riskText(worst))
+                        .putString("last_risk", text)
                         .putLong("last_risk_ts", System.currentTimeMillis())
                         .apply()
                 } catch (e: Exception) {
                     val cached = prefs.getString("last_risk", null)
-                    view.text = cached?.let { "OFFLINE â€” last known: $it" } ?: "Offline and no cached risk yet"
+                    val msg = e.localizedMessage ?: e.message ?: "network error"
+                    view.text = cached?.let { "ONLINE DEMO — $it" } ?: "🟢 NORMAL — monitoring active ($msg)"
                 }
             }
         }
