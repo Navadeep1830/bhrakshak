@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 from geoalchemy2 import WKTElement
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -826,58 +826,155 @@ async def publish_live(event_type: str, payload: dict) -> None:
         log.warning("live publish failed: %s", e)
 
 
-async def evaluate_zone(db: AsyncSession, zone: Zone, cell: RiskCell | None) -> RiskCell:
+async def _bulk_zone_context(db: AsyncSession, zone_ids: list, since7: datetime) -> dict:
+    """Prefetch every per-zone evaluation input in a handful of statements.
+
+    evaluate_zone() used to issue ~5 queries per zone; across 536 zones that
+    is ~2 700 round-trips per tick. This returns
+    ``{zone_id: {"obs": RainfallObs | None, "seismic_flag": bool,
+    "verified_7d": int}}`` for the whole fleet instead.
+    """
+    if not zone_ids:
+        return {}
+
+    # latest observation ts per zone (GROUP BY), then the full rows for
+    # exactly those (zone_id, ts) pairs — portable across PG and SQLite,
+    # unlike DISTINCT ON.
+    latest_ts = (
+        await db.execute(
+            select(RainfallObs.zone_id, func.max(RainfallObs.ts))
+            .where(RainfallObs.zone_id.in_(zone_ids))
+            .group_by(RainfallObs.zone_id)
+        )
+    ).all()
+    obs_by_zone: dict = {}
+    if latest_ts:
+        rows = (
+            await db.execute(
+                select(RainfallObs).where(
+                    tuple_(RainfallObs.zone_id, RainfallObs.ts).in_(latest_ts)
+                )
+            )
+        ).scalars().all()
+        obs_by_zone = {r.zone_id: r for r in rows}
+
+    # zone centroids once for the whole fleet
+    centroids: dict = {}
+    try:
+        crows = (
+            await db.execute(
+                select(Zone.id, func.ST_Y(func.ST_Centroid(Zone.geom)), func.ST_X(func.ST_Centroid(Zone.geom)))
+                .where(Zone.id.in_(zone_ids))
+            )
+        ).all()
+        centroids = {zid: (float(la or 0), float(lo or 0)) for zid, la, lo in crows}
+    except Exception as e:  # pragma: no cover - non-PostGIS backend
+        log.debug("bulk centroid query unavailable: %s", e)
+
+    ctx: dict = {}
+    for zid in zone_ids:
+        ctx[zid] = {"obs": obs_by_zone.get(zid), "seismic_flag": False, "verified_7d": 0}
+
+    # seismic triggers: one join instead of one COUNT per zone
+    try:
+        sq = (
+            select(Zone.id)
+            .select_from(SeismicEvent)
+            .join(Zone, func.abs(SeismicEvent.lat - func.ST_Y(func.ST_Centroid(Zone.geom))) < 1.0)
+            .where(
+                SeismicEvent.trigger_flag.is_(True),
+                SeismicEvent.occurred_at >= since7,
+                func.abs(SeismicEvent.lon - func.ST_X(func.ST_Centroid(Zone.geom))) < 1.0,
+            )
+            .distinct()
+        )
+        for (zid,) in (await db.execute(sq)).all():
+            if zid in ctx:
+                ctx[zid]["seismic_flag"] = True
+    except Exception as e:  # pragma: no cover - non-PostGIS backend
+        log.debug("bulk seismic context unavailable: %s", e)
+
+    # field-verified reports near the zone centroid in the last 7d
+    try:
+        rq = (
+            select(Zone.id)
+            .select_from(CitizenReport)
+            .join(Zone, func.ST_DWithin(CitizenReport.geom, func.ST_Centroid(Zone.geom), 0.05))
+            .where(
+                CitizenReport.status == "verified",
+                CitizenReport.created_at >= since7,
+            )
+            .distinct()
+        )
+        for (zid,) in (await db.execute(rq)).all():
+            if zid in ctx:
+                ctx[zid]["verified_7d"] += 1
+    except Exception as e:  # pragma: no cover - non-PostGIS backend
+        log.debug("bulk report context unavailable: %s", e)
+
+    return ctx
+
+
+async def evaluate_zone(
+    db: AsyncSession, zone: Zone, cell: RiskCell | None, ctx: dict | None = None
+) -> RiskCell:
     now = datetime.now(timezone.utc)
-    res = await db.execute(
-        select(RainfallObs)
-        .where(RainfallObs.zone_id == zone.id)
-        .order_by(RainfallObs.ts.desc())
-        .limit(1)
-    )
-    obs = res.scalar_one_or_none()
+    if ctx is not None:
+        obs = ctx.get("obs")
+        seismic_flag = bool(ctx.get("seismic_flag", False))
+        verified_7d = int(ctx.get("verified_7d", 0))
+    else:
+        res = await db.execute(
+            select(RainfallObs)
+            .where(RainfallObs.zone_id == zone.id)
+            .order_by(RainfallObs.ts.desc())
+            .limit(1)
+        )
+        obs = res.scalar_one_or_none()
+
+        # Bundle-contract context features, queried not invented: M>=4 seismic
+        # trigger within ~1 deg of the zone in the last 7d, and field-verified
+        # citizen reports in the last 7d near the zone centroid.
+        since7 = now - timedelta(days=7)
+        try:
+            clat, clon = (
+                await db.execute(
+                    select(func.ST_Y(func.ST_Centroid(Zone.geom)), func.ST_X(func.ST_Centroid(Zone.geom))).where(Zone.id == zone.id)
+                )
+            ).one()
+            seismic_flag = bool(
+                (
+                    await db.execute(
+                        select(func.count()).select_from(SeismicEvent).where(
+                            SeismicEvent.trigger_flag.is_(True),
+                            SeismicEvent.occurred_at >= since7,
+                            func.abs(SeismicEvent.lat - float(clat or 0)) < 1.0,
+                            func.abs(SeismicEvent.lon - float(clon or 0)) < 1.0,
+                        )
+                    )
+                ).scalar_one()
+            )
+            verified_7d = int(
+                (
+                    await db.execute(
+                        select(func.count())
+                        .select_from(CitizenReport)
+                        .join(Zone, Zone.id == zone.id)
+                        .where(
+                            CitizenReport.status == "verified",
+                            CitizenReport.created_at >= since7,
+                            func.ST_DWithin(CitizenReport.geom, func.ST_Centroid(Zone.geom), 0.05),
+                        )
+                    )
+                ).scalar_one()
+            )
+        except Exception as e:
+            log.debug("context features unavailable for %s: %s", zone.zone_code, e)
+            seismic_flag, verified_7d = False, 0
+
     rain_1h = float(obs.rain_1h) if obs and obs.rain_1h is not None else 0.0
     rain_24h = float(obs.rain_24h) if obs and obs.rain_24h is not None else 0.0
     soil = obs.soil_moisture if obs else None
-
-    # Bundle-contract context features, queried not invented: M>=4 seismic
-    # trigger within ~1 deg of the zone in the last 7d, and field-verified
-    # citizen reports in the last 7d near the zone centroid.
-    since7 = now - timedelta(days=7)
-    try:
-        clat, clon = (
-            await db.execute(
-                select(func.ST_Y(func.ST_Centroid(Zone.geom)), func.ST_X(func.ST_Centroid(Zone.geom))).where(Zone.id == zone.id)
-            )
-        ).one()
-        seismic_flag = bool(
-            (
-                await db.execute(
-                    select(func.count()).select_from(SeismicEvent).where(
-                        SeismicEvent.trigger_flag.is_(True),
-                        SeismicEvent.occurred_at >= since7,
-                        func.abs(SeismicEvent.lat - float(clat or 0)) < 1.0,
-                        func.abs(SeismicEvent.lon - float(clon or 0)) < 1.0,
-                    )
-                )
-            ).scalar_one()
-        )
-        verified_7d = int(
-            (
-                await db.execute(
-                    select(func.count())
-                    .select_from(CitizenReport)
-                    .join(Zone, Zone.id == zone.id)
-                    .where(
-                        CitizenReport.status == "verified",
-                        CitizenReport.created_at >= since7,
-                        func.ST_DWithin(CitizenReport.geom, func.ST_Centroid(Zone.geom), 0.05),
-                    )
-                )
-            ).scalar_one()
-        )
-    except Exception as e:
-        log.debug("context features unavailable for %s: %s", zone.zone_code, e)
-        seismic_flag, verified_7d = False, 0
 
     # `obs` is handed to the model whole: it carries rain_48h / rain_72h /
     # rain_7d / eff_rain, which are measured columns on rainfall_obs. Reading
@@ -1035,9 +1132,14 @@ async def snapshot_zone(db: AsyncSession, zone: Zone, cell: RiskCell) -> None:
 async def evaluate_all_zones(db: AsyncSession) -> dict[str, Any]:
     zones = (await db.execute(select(Zone))).scalars().all()
     cells = {c.zone_id: c for c in (await db.execute(select(RiskCell))).scalars().all()}
+    # One bulk prefetch of every per-zone input (latest obs, seismic trigger,
+    # verified report counts) instead of ~5 queries x 536 zones per tick.
+    ctx_by_zone = await _bulk_zone_context(
+        db, [z.id for z in zones], datetime.now(timezone.utc) - timedelta(days=7)
+    )
     escalated = []
     for zone in zones:
-        cell = await evaluate_zone(db, zone, cells.get(zone.id))
+        cell = await evaluate_zone(db, zone, cells.get(zone.id), ctx=ctx_by_zone.get(zone.id))
         await snapshot_zone(db, zone, cell)
         escalated.append({"zone_code": zone.zone_code, "level": cell.hazard_level})
     await db.commit()
