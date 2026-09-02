@@ -42,6 +42,10 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
+    def jwt_secret_is_default(self) -> bool:
+        return self.jwt_secret == "change-me-in-production-9f2c1a" or len(self.jwt_secret) < 32
+
+    @property
     def sync_database_url(self) -> str:
         return self.database_url.replace("+asyncpg", "+psycopg")
 

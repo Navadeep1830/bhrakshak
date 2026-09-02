@@ -27,6 +27,13 @@ log = _json_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast: a default/short HMAC key in production means anyone can mint
+    # tokens. Demo keeps working; only a non-demo deployment is blocked.
+    if not settings.demo_mode and settings.jwt_secret_is_default:
+        raise RuntimeError(
+            "JWT_SECRET must be overridden with a >=32-char secret when "
+            "DEMO_MODE=false — refusing to start with the default key"
+        )
     log.info("%s starting (demo_mode=%s)", settings.app_name, settings.demo_mode)
     yield
     log.info("shutdown complete")
