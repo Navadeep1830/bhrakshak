@@ -37,6 +37,9 @@ const RISK_FILL_OPACITY = [
 export default function MapView() {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
+  const layersRef = useRef(useAppStore.getState().layers);
+  const centroidRef = useRef<Record<string, GeoJSON.Feature["geometry"]> | null>(null);
+  const crowdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const selectZone = useAppStore((s) => s.selectZone);
   const selectedZoneId = useAppStore((s) => s.selectedZoneId);
   const layers = useAppStore((s) => s.layers);
@@ -477,6 +480,109 @@ export default function MapView() {
         },
       });
 
+      // --- live BLE crowd-density layer (feature 3) -------------------------
+      // Points come from /api/v1/ble/heatmap: one entry per zone with a fresh
+      // (<2h) beacon sighting, intensity already recency-decayed server-side.
+      // Zone centroids are embedded in the payload as Point features.
+      map.addSource("ble-crowd", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addSource("population-heat", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "population-heat-circles",
+        type: "circle",
+        source: "population-heat",
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": [
+            "interpolate", ["linear"], ["coalesce", ["get", "intensity"], 0],
+            0, 4, 2000, 10, 20000, 18, 100000, 28,
+          ],
+          "circle-color": [
+            "interpolate", ["linear"], ["coalesce", ["get", "hazard_level"], 0],
+            0, "#FACD3A", 2, "#FB923C", 4, "#F87171",
+          ],
+          "circle-opacity": 0.4,
+          "circle-blur": 0.9,
+          "circle-stroke-width": 0.6,
+          "circle-stroke-color": "#0B1220",
+        },
+      });
+      map.addLayer({
+        id: "ble-crowd-glow",
+        type: "circle",
+        source: "ble-crowd",
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": [
+            "interpolate", ["linear"], ["coalesce", ["get", "intensity"], 0],
+            0, 4, 10, 14, 40, 26, 120, 40,
+          ],
+          "circle-color": "#38BDF8",
+          "circle-opacity": 0.18,
+          "circle-blur": 1.1,
+        },
+      });
+      map.addLayer({
+        id: "ble-crowd-core",
+        type: "circle",
+        source: "ble-crowd",
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": [
+            "interpolate", ["linear"], ["coalesce", ["get", "intensity"], 0],
+            0, 3, 10, 8, 40, 13, 120, 19,
+          ],
+          "circle-color": [
+            "interpolate", ["linear"], ["coalesce", ["get", "intensity"], 0],
+            0, "#0EA5E9", 40, "#38BDF8", 120, "#F472B6",
+          ],
+          "circle-stroke-width": 1.4,
+          "circle-stroke-color": "#0B1220",
+        },
+      });
+      map.on("click", "ble-crowd-core", (e) => {
+        const p = e.features?.[0]?.properties;
+        if (!p) return;
+        new maplibregl.Popup({ closeButton: true })
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="font-family:Inter,sans-serif;font-size:12px;color:#F8FAFC;background:#111A2C;padding:8px;border-radius:6px;border:1px solid #38BDF8">
+               <div style="font-weight:bold;color:#38BDF8;font-size:13px">📡 Live crowd estimate — ${p.name}</div>
+               <div style="margin-top:4px">Devices seen: <b>${p.n_devices}</b> · ≈<b>${p.estimated_people}</b> people</div>
+               <div style="margin-top:4px;font-size:11px;color:#94A3B8">${p.n_reporters} reporter(s) · ${p.age_min} min ago · zone ${p.zone_code}</div>
+             </div>`
+          )
+          .addTo(map);
+      });
+
+      // refresh the crowd layer every 60 s (only while visible)
+      const loadCrowd = () => {
+        if (!layersRef.current.crowd) return;
+        fetch(`${endpoints.API}/api/v1/ble/heatmap`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((heat) => {
+            const src = map.getSource("ble-crowd") as maplibregl.GeoJSONSource | undefined;
+            if (!src || !heat?.zones?.length) return;
+            src.setData({
+              type: "FeatureCollection",
+              features: heat.zones.map((z: { zone_code: string; name: string; n_devices: number; estimated_people: number; n_reporters: number; age_min: number; intensity: number; district?: string }) => ({
+                type: "Feature",
+                properties: { ...z },
+                geometry: centroidRef.current?.[z.zone_code] ?? null,
+              })).filter((f: { geometry: unknown }) => f.geometry != null),
+            });
+          })
+          .catch(() => {});
+      };
+      loadCrowd();
+      const crowdTimer = setInterval(loadCrowd, 60_000);
+      crowdTimerRef.current = crowdTimer;
+
       // interactions
       let hovered: string | null = null;
       map.on("mousemove", "risk-fill", (e) => {
@@ -558,6 +664,22 @@ export default function MapView() {
           .addTo(map);
       });
 
+      // zone centroids (population-heatmap payload) power the BLE crowd layer
+      fetch(`${endpoints.API}/api/v1/analytics/population-heatmap`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((ph) => {
+          if (!ph?.features?.length) return;
+          const cents: Record<string, GeoJSON.Feature["geometry"]> = {};
+          for (const f of ph.features) {
+            if (f?.properties?.zone_code && f?.geometry) cents[f.properties.zone_code] = f.geometry;
+          }
+          centroidRef.current = cents;
+          // population layer shares the same payload
+          const psrc = map.getSource("population-heat") as maplibregl.GeoJSONSource | undefined;
+          if (psrc) psrc.setData({ type: "FeatureCollection", features: ph.features });
+        })
+        .catch(() => {});
+
       // expose flyTo for the rail
       (window as unknown as { __flyTo?: (c: number[], z: number) => void }).__flyTo = (
         c: number[],
@@ -568,6 +690,7 @@ export default function MapView() {
     return () => {
       clearInterval(spin);
       clearInterval(pulser);
+      if (crowdTimerRef.current) clearInterval(crowdTimerRef.current);
       map.remove();
       mapRef.current = null;
     };
@@ -576,6 +699,7 @@ export default function MapView() {
 
   // layer visibility + selection filters react to store changes
   useEffect(() => {
+    layersRef.current = layers;
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     const vis = (layer: string, on?: boolean) =>
@@ -601,6 +725,9 @@ export default function MapView() {
       vis("machinery-labels", layers.detours);
       vis("radar-cells-fill", layers.rainfall);
       vis("radar-cells-outline", layers.rainfall);
+      vis("ble-crowd-glow", layers.crowd);
+      vis("ble-crowd-core", layers.crowd);
+      vis("population-heat-circles", layers.population);
       if (selectedZoneId) {
         map.setFilter("zone-selected-outline", ["==", ["get", "zone_id"], selectedZoneId]);
       } else {

@@ -13,6 +13,8 @@ const LAYERS: { key: string; label: string; hint?: string }[] = [
   { key: "detours", label: "Emergency Detours & Blockages" },
   { key: "shelters", label: "Relief Camps & Hospitals" },
   { key: "reports", label: "Citizen reports" },
+  { key: "crowd", label: "Crowd density (BLE live)", hint: "phone beaconing where cell network is down" },
+  { key: "population", label: "Population heatmap (WorldPop)" },
   { key: "deformation", label: "Deformation (InSAR)", hint: "LiCSAR AOIs — ML phase" },
 ];
 

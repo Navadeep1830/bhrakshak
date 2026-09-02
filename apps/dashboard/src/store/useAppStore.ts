@@ -32,6 +32,8 @@ export const useAppStore = create<AppState>((set) => ({
     reports: true,
     deformation: false,
     rainfall: true,
+    crowd: false,
+    population: false,
   },
   demoMode: false,
   radarStep: 6, // 6 corresponds to NOW
