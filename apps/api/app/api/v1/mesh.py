@@ -47,7 +47,10 @@ class MeshMessage(BaseModel):
 @router.post("/signal")
 async def mesh_signal(msg: MeshMessage, user: User = Depends(get_current_user)):
     """Drop a signaling message into the session mailbox; returns messages
-    addressed to the sender since `after` (long-poll in one round-trip)."""
+    addressed to the sender since `after` (long-poll in one round-trip).
+
+    In-memory rendezvous only: no DB session, so it works even when Postgres
+    is unhealthy — relay handshakes must not depend on the database."""
     _gc()
     if len(msg.body) > _MAX_BODY:
         raise HTTPException(413, "chunk too large")
@@ -73,6 +76,8 @@ async def mesh_poll(session_id: str, after: int = 0,
     msgs = box["messages"]
     return {
         "session_id": session_id,
-        "messages": [m for m in msgs if m.get("seq", 0) > after][-200:],
+        # seq is optional on stored messages: a None compares as "not after
+        # the cursor" rather than TypeError-ing the poll loop.
+        "messages": [m for m in msgs if (m.get("seq") or 0) > after][-200:],
         "cursor": len(msgs),
     }
