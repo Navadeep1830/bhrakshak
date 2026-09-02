@@ -185,14 +185,15 @@ def _observed(obs: Any, attr: str) -> float | None:
     return None if f != f else f
 
 
-def _physical_prob(rain_1h: float, rain_24h: float, susc_p90: float) -> float:
+def _physical_prob(rain_1h: float, rain_24h: float, susc_p90: float, seismic_flag: bool = False) -> float:
     """Closed-form logistic prior used when no trustworthy bundle is loaded.
 
-    Transparent and auditable: three observable inputs, fixed coefficients. It
-    is deliberately not presented as a fitted model -- there is no training
-    data behind these weights, only the I-D reasoning in THRESHOLDS_BY_SUSC_BAND.
+    Transparent and auditable: three observable inputs + seismic acceleration shift.
     """
-    return float(1.0 / (1.0 + np.exp(-(-6.5 + 0.035 * rain_24h + 0.045 * rain_1h + 0.04 * susc_p90))))
+    base_logit = -6.5 + 0.035 * rain_24h + 0.045 * rain_1h + 0.04 * susc_p90
+    if seismic_flag:
+        base_logit += 2.5  # Dynamic seismic shaking shift (+35% to +45% prob boost)
+    return float(1.0 / (1.0 + np.exp(-base_logit)))
 
 
 def predict_model_b(
@@ -364,7 +365,10 @@ def predict_model_b(
                 prob = None
 
     if prob is None:
-        prob = _physical_prob(rain_1h, rain_24h, susc_p90_val)
+        prob = _physical_prob(rain_1h, rain_24h, susc_p90_val, seismic_flag=seismic_flag)
+
+    if seismic_flag and prob is not None:
+        prob = min(0.99, prob + 0.35)
 
     # --- driver breakdown: only measured quantities ----------------------
     def _drv(feature, name, value, val_num, weight, description, missing=False):
@@ -416,6 +420,16 @@ def predict_model_b(
             missing=rain_7d is None,
         ),
     ]
+
+    if seismic_flag:
+        drivers.append(
+            _drv(
+                "Seismic Acceleration", "Ground Motion & P/S Wave Shaking",
+                "M >= 4.0 Quake", 1.0,
+                0.35,
+                "Dynamic ground acceleration reducing slope shear strength",
+            )
+        )
 
     # Layer-3 deformation only counts when a satellite actually measured it.
     if insar_velocity_mm_yr is not None:
