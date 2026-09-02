@@ -15,6 +15,7 @@ import android.net.NetworkRequest
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -252,8 +253,40 @@ class MainActivity : AppCompatActivity() {
         root.addView(label("Logged in as $email"))
         runCatching { LiveAlertService.start(this) }
 
+        // --- Demo Location Override Picker (Judge Demo Control) ---
+        root.addView(label("📍 SIMULATE LOCATION (Demo Control)"))
+        val locSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                listOf(
+                    "📍 Tupul Station Yard (Noney, Manipur)",
+                    "📍 Cherrapunji Cut-Slope (East Khasi Hills)",
+                    "📍 Aizawl North Slope (Mizoram)",
+                    "📍 Gangtok Highway Sector (Sikkim)",
+                    "📡 My Actual Device GPS",
+                ),
+            )
+        }
+        root.addView(locSpinner)
+
         val riskNow = mono("📍 Fetching live risk at location...", 16f)
         root.addView(riskNow)
+
+        locSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p0: AdapterView<*>?, p1: View?, pos: Int, p3: Long) {
+                when (pos) {
+                    0 -> { lastLat = 24.88; lastLon = 93.72 } // Tupul
+                    1 -> { lastLat = 25.27; lastLon = 91.73 } // Cherrapunji
+                    2 -> { lastLat = 23.73; lastLon = 92.72 } // Aizawl
+                    3 -> { lastLat = 27.33; lastLon = 88.61 } // Gangtok
+                    4 -> { /* Real GPS fallback */ }
+                }
+                refreshRisk(riskNow)
+            }
+            override fun onNothingSelected(p0: AdapterView<*>?) {}
+        }
+
         refreshRisk(riskNow)
 
         root.addView(button("I'M SAFE — check in", 0xFF059669.toInt()) { safeCheckin() })
