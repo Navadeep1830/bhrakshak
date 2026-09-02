@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -6,7 +6,7 @@ import httpx
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.db.session import SessionLocal
+from worker.db_local import fresh_sessionmaker
 from app.models import SeismicEvent
 from worker.celery_app import celery_app
 
@@ -42,7 +42,7 @@ def poll_seismic():
             except Exception as e:
                 log.warning("USGS fetch failed: %s", e)
         n_flagged = 0
-        async with SessionLocal() as db:
+        async with fresh_sessionmaker()() as db:
             for f in events:
                 eid = f["id"]
                 lon, lat, depth = f["geometry"]["coordinates"][:3]

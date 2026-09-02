@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.db.session import SessionLocal
+from worker.db_local import fresh_sessionmaker
 from app.models import RainfallObs, Zone
 from worker.celery_app import celery_app
 
@@ -50,7 +50,7 @@ async def _poll_all() -> int:
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     written = 0
 
-    async with SessionLocal() as db:
+    async with fresh_sessionmaker()() as db:
         zone_rows = (
             await db.execute(
                 select(
@@ -128,7 +128,7 @@ async def _poll_all() -> int:
                         # Open-Meteo serves volumetric water content (m3/m3,
                         # e.g. 0.386); the whole API + geotech read PERCENT
                         # (38.6). Same 100x conversion ml/ingest/weather.py
-                        # does at its boundary — the worker must agree or
+                        # does at its boundary â€” the worker must agree or
                         # FoS and the soil-moisture driver read nonsense.
                         soil_moisture=(float(sm) * 100.0) if (sm is not None and float(sm) <= 1.0) else sm,
                     )

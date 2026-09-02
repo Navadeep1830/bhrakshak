@@ -1,4 +1,4 @@
-package com.bhrakshak.field
+﻿package com.bhrakshak.field
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -30,6 +30,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.location.LocationServices
 import com.bhrakshak.field.data.Api
+import com.bhrakshak.field.data.ApiConfig
 import com.bhrakshak.field.data.BhuDb
 import com.bhrakshak.field.data.LoginIn
 import com.bhrakshak.field.data.QueuedReport
@@ -54,7 +55,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Single-activity shell. Every screen is REAL — each one calls the same
+ * Single-activity shell. Every screen is REAL â€” each one calls the same
  * FastAPI backend the dashboard and PWA use, and every fetch result is
  * cached to app storage so the screen still renders last-known state with
  * zero connectivity (the NER valley case).
@@ -119,6 +120,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(scroll)
 
         restoreLastLocation()
+        prefs.getString("server_url", null)?.let { ApiConfig.setUrl(it) }
         requestPermissionsIfNeeded()
         SyncWorker.schedule(this)
         registerConnectivityCallback()
@@ -161,13 +163,26 @@ class MainActivity : AppCompatActivity() {
         root.removeAllViews()
         root.addView(title("Bhu"))
         root.addView(TextView(this).apply {
-            text = "Rakshak — Field (SIH26001)"
+            text = "Rakshak â€” Field (SIH26001)"
             setTextColor(0xFFFB923C.toInt()); textSize = 22f
         })
+        val server = EditText(this).apply {
+            hint = "server url (http://192.168.x.x:8000)"
+            setSingleLine()
+            setText(prefs.getString("server_url", ApiConfig.baseUrl))
+        }
+        root.addView(server)
+        root.addView(label("Emulator keeps the default. On your phone use your PC's LAN IP (ipconfig) â€” same WiFi."))
         val email = EditText(this).apply { hint = "email"; setSingleLine() }
         val pw = EditText(this).apply { hint = "password"; inputType = 0x81 }
         root.addView(email); root.addView(pw)
         root.addView(button("Login", 0xFFEA580C.toInt()) {
+            val newUrl = server.text.toString().trim()
+            if (newUrl.isNotEmpty() && newUrl != ApiConfig.baseUrl) {
+                ApiConfig.setUrl(newUrl)
+                Api.rebuild()
+                prefs.edit().putString("server_url", ApiConfig.baseUrl).apply()
+            }
             lifecycleScope.launch {
                 try {
                     val out = Api.service.login(
@@ -182,7 +197,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
-        root.addView(label("Demo: citizen@bhrakshak.in / Citizen@123 · field.noney@bhrakshak.in / Field@123"))
+        root.addView(label("Demo: citizen@bhrakshak.in / Citizen@123 Â· field.noney@bhrakshak.in / Field@123"))
     }
 
     // ------------------------------------------------------------------ home
@@ -196,7 +211,7 @@ class MainActivity : AppCompatActivity() {
         val riskNow = mono("", 16f)
         root.addView(riskNow)
         root.addView(button("Refresh risk at my location", 0xFF1E293B.toInt()) { refreshRisk(riskNow) })
-        root.addView(button("I'M SAFE — check in", 0xFF059669.toInt()) { safeCheckin() })
+        root.addView(button("I'M SAFE â€” check in", 0xFF059669.toInt()) { safeCheckin() })
         root.addView(button("SAFEST ROUTE (pathway model)", 0xFF0284C7.toInt()) { showSafeRoute() })
         root.addView(button("RAIN GAUGE (nearest zone)", 0xFF7C3AED.toInt()) { showRainGauge() })
         root.addView(button("ALERTS", 0xFFB45309.toInt()) { lifecycleScope.launch { showAlerts() } })
@@ -226,7 +241,7 @@ class MainActivity : AppCompatActivity() {
                 val la = lat ?: lastLat
                 val lo = lon ?: lastLon
                 if (la == null || lo == null) {
-                    Toast.makeText(this, "No location fix yet — enable GPS and retry", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "No location fix yet â€” enable GPS and retry", Toast.LENGTH_LONG).show()
                     return@getLocationAndThen
                 }
                 lifecycleScope.launch {
@@ -239,7 +254,7 @@ class MainActivity : AppCompatActivity() {
                             photoPath = pendingPhotoPath,
                         )
                     )
-                    Toast.makeText(this@MainActivity, "Queued — syncs automatically ✓", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Queued â€” syncs automatically âœ“", Toast.LENGTH_SHORT).show()
                     desc.setText(""); pendingPhotoPath = null; photoState.text = "no photo"
                 }
             }
@@ -266,7 +281,7 @@ class MainActivity : AppCompatActivity() {
             val la = lat ?: lastLat
             val lo = lon ?: lastLon
             if (la == null || lo == null) {
-                view.text = "Location unavailable — enable GPS"
+                view.text = "Location unavailable â€” enable GPS"
                 return@getLocationAndThen
             }
             lifecycleScope.launch {
@@ -290,18 +305,18 @@ class MainActivity : AppCompatActivity() {
                         .apply()
                 } catch (e: Exception) {
                     val cached = prefs.getString("last_risk", null)
-                    view.text = cached?.let { "OFFLINE — last known: $it" } ?: "Offline and no cached risk yet"
+                    view.text = cached?.let { "OFFLINE â€” last known: $it" } ?: "Offline and no cached risk yet"
                 }
             }
         }
     }
 
     private fun riskText(z: ZoneOut): String = when (z.hazardLevel) {
-        4 -> "🔴 EMERGENCY (L4) near ${z.zoneCode} — evacuate via SAFEST ROUTE now"
-        3 -> "🟠 WARNING (L3) near ${z.zoneCode} — avoid slopes, prepare to move"
-        2 -> "🟡 ALERT (L2) near ${z.zoneCode} — stay alert, avoid cut slopes"
-        1 -> "🟢 WATCH (L1) near ${z.zoneCode} — normal monsoon vigilance"
-        else -> "🟢 NORMAL — no landslide risk detected around ${z.zoneCode}"
+        4 -> "ðŸ”´ EMERGENCY (L4) near ${z.zoneCode} â€” evacuate via SAFEST ROUTE now"
+        3 -> "ðŸŸ  WARNING (L3) near ${z.zoneCode} â€” avoid slopes, prepare to move"
+        2 -> "ðŸŸ¡ ALERT (L2) near ${z.zoneCode} â€” stay alert, avoid cut slopes"
+        1 -> "ðŸŸ¢ WATCH (L1) near ${z.zoneCode} â€” normal monsoon vigilance"
+        else -> "ðŸŸ¢ NORMAL â€” no landslide risk detected around ${z.zoneCode}"
     }
 
     private fun cacheZones(zones: List<ZoneOut>) {
@@ -323,7 +338,7 @@ class MainActivity : AppCompatActivity() {
         getLocationAndThen { lat, lon ->
             lifecycleScope.launch {
                 db.checkinDao().add(SafeCheckin(lat = lat, lon = lon, ts = nowIso()))
-                Toast.makeText(this@MainActivity, "Check-in recorded ✓ (stored on device, survives offline)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Check-in recorded âœ“ (stored on device, survives offline)", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -334,7 +349,7 @@ class MainActivity : AppCompatActivity() {
             val la = lat ?: lastLat
             val lo = lon ?: lastLon
             if (la == null || lo == null) {
-                Toast.makeText(this, "No location fix yet — enable GPS and retry", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "No location fix yet â€” enable GPS and retry", Toast.LENGTH_LONG).show()
                 return@getLocationAndThen
             }
             lifecycleScope.launch { routeScreen(la, lo) }
@@ -346,7 +361,7 @@ class MainActivity : AppCompatActivity() {
             root.removeAllViews()
             root.addView(title("SAFEST ROUTE"))
             root.addView(label("Pathway model: routes AROUND live L3+ cells; destination scored on flatness, capacity, medical support"))
-            val d = mono("routing to the safest reachable shelter…")
+            val d = mono("routing to the safest reachable shelterâ€¦")
             root.addView(d)
             root.addView(button("Back", 0xFF334155.toInt()) { showHome() })
             d
@@ -357,13 +372,13 @@ class MainActivity : AppCompatActivity() {
             withContext(Dispatchers.Main) {
                 details.text = routeSummary(route)
                 root.addView(RouteView(this@MainActivity, route), root.childCount - 1)
-                root.addView(label("Route bends AROUND high-danger cells — not the shortest path."), root.childCount - 1)
+                root.addView(label("Route bends AROUND high-danger cells â€” not the shortest path."), root.childCount - 1)
             }
         } catch (e: Exception) {
             val cached = cachedRoute(lat, lon)
             withContext(Dispatchers.Main) {
                 details.text = if (cached != null) {
-                    "OFFLINE — last known route:\n\n" + routeSummary(cached)
+                    "OFFLINE â€” last known route:\n\n" + routeSummary(cached)
                 } else {
                     "Offline and no cached route yet. Move to open flat ground away from steep slopes and river banks."
                 }
@@ -381,7 +396,7 @@ class MainActivity : AppCompatActivity() {
         append("hazard enroute: mean ${"%.2f".format(r.meanHazard)}, max ${"%.2f".format(r.maxHazard)}\n")
         r.destination.capacity?.let { cap ->
             append("capacity     : ${r.destination.occupancy ?: 0}/$cap beds")
-            if (r.destination.hasMedical == true) append(" · medical ✓")
+            if (r.destination.hasMedical == true) append(" Â· medical âœ“")
             append("\n")
         }
         r.destination.distToSteepM?.let { append("flat clearance: ${it.toInt()} m from nearest steep slope\n") }
@@ -448,14 +463,14 @@ class MainActivity : AppCompatActivity() {
     private fun showRainGauge() {
         root.removeAllViews()
         root.addView(title("RAIN GAUGE"))
-        val status = mono("loading nearest zone…")
+        val status = mono("loading nearest zoneâ€¦")
         root.addView(status)
         root.addView(button("Back", 0xFF334155.toInt()) { showHome() })
         lifecycleScope.launch {
             val zones = lastZones.ifEmpty { cachedZones() }
             val nearest = zones.maxByOrNull { it.hazardLevel }
             if (nearest == null) {
-                status.text = "No zone context yet — refresh risk at my location first."
+                status.text = "No zone context yet â€” refresh risk at my location first."
                 return@launch
             }
             try {
@@ -465,7 +480,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 val cached = prefs.getString("last_weather", null)
                     ?.let { runCatching { Api.json.decodeFromString(WeatherOut.serializer(), it) }.getOrNull() }
-                status.text = cached?.let { "OFFLINE — last known:\n\n" + weatherSummary(it) }
+                status.text = cached?.let { "OFFLINE â€” last known:\n\n" + weatherSummary(it) }
                     ?: "Offline and no cached gauge data yet."
             }
         }
@@ -490,9 +505,9 @@ class MainActivity : AppCompatActivity() {
             }
             if (idc != null) {
                 append("I-D THRESHOLD CHECK\n")
-                append("  1h intensity : ${"%.1f".format(idc.i1hObserved ?: 0.0)} / ${"%.1f".format(idc.i1hCritical ?: 0.0)} mm  ${if (idc.breach1h) "⚠ BREACHED" else "ok"}\n")
-                append("  24h intensity: ${"%.1f".format(idc.i24hObserved ?: 0.0)} / ${"%.1f".format(idc.i24hCritical ?: 0.0)} mm  ${if (idc.breach24h) "⚠ BREACHED" else "ok"}\n")
-                append(if (idc.anyBreach) "\n⚠ THRESHOLD BREACHED — slope failure conditions present" else "\nbelow critical thresholds")
+                append("  1h intensity : ${"%.1f".format(idc.i1hObserved ?: 0.0)} / ${"%.1f".format(idc.i1hCritical ?: 0.0)} mm  ${if (idc.breach1h) "âš  BREACHED" else "ok"}\n")
+                append("  24h intensity: ${"%.1f".format(idc.i24hObserved ?: 0.0)} / ${"%.1f".format(idc.i24hCritical ?: 0.0)} mm  ${if (idc.breach24h) "âš  BREACHED" else "ok"}\n")
+                append(if (idc.anyBreach) "\nâš  THRESHOLD BREACHED â€” slope failure conditions present" else "\nbelow critical thresholds")
             }
         }
     }
@@ -507,7 +522,7 @@ class MainActivity : AppCompatActivity() {
             root.removeAllViews()
             root.addView(title("ALERTS"))
             root.addView(label("Live alerts also push as notifications (WS /ws/live)"))
-            val s = mono("loading alert history…")
+            val s = mono("loading alert historyâ€¦")
             root.addView(s)
             root.addView(button("Back", 0xFF334155.toInt()) { showHome() })
             s
@@ -518,16 +533,16 @@ class MainActivity : AppCompatActivity() {
             withContext(Dispatchers.Main) {
                 status.text = if (alerts.isEmpty()) "no alerts fired yet"
                 else alerts.take(20).joinToString("\n\n") { a ->
-                    "${levelTag(a.level)} · ${a.firedAt?.take(19)?.replace('T', ' ') ?: ""}\n${a.message ?: ""}\nchannels: ${a.channels.joinToString(", ")}"
+                    "${levelTag(a.level)} Â· ${a.firedAt?.take(19)?.replace('T', ' ') ?: ""}\n${a.message ?: ""}\nchannels: ${a.channels.joinToString(", ")}"
                 }
             }
         } catch (e: Exception) {
-            withContext(Dispatchers.Main) { status.text = "Offline — alert history unavailable" }
+            withContext(Dispatchers.Main) { status.text = "Offline â€” alert history unavailable" }
         }
     }
 
     private fun levelTag(level: Int) = when (level) {
-        4 -> "🔴 L4 EMERGENCY"; 3 -> "🟠 L3 WARNING"; 2 -> "🟡 L2 ALERT"; 1 -> "🟢 L1 WATCH"; else -> "· L0"
+        4 -> "ðŸ”´ L4 EMERGENCY"; 3 -> "ðŸŸ  L3 WARNING"; 2 -> "ðŸŸ¡ L2 ALERT"; 1 -> "ðŸŸ¢ L1 WATCH"; else -> "Â· L0"
     }
 
     // ------------------------------------------------------------------ photo + Model V pre-screen
@@ -561,11 +576,11 @@ class MainActivity : AppCompatActivity() {
             )
             Toast.makeText(
                 this,
-                "AI pre-screen: ${verdict.verdict} (${(verdict.probability * 100).toInt()}%)${verdict.gpsMismatchM?.let { " · GPS mismatch ${it.toInt()} m" } ?: ""}",
+                "AI pre-screen: ${verdict.verdict} (${(verdict.probability * 100).toInt()}%)${verdict.gpsMismatchM?.let { " Â· GPS mismatch ${it.toInt()} m" } ?: ""}",
                 Toast.LENGTH_LONG,
             ).show()
         } catch (e: Exception) {
-            Toast.makeText(this, "Offline — photo queued, AI verdict will attach at sync", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Offline â€” photo queued, AI verdict will attach at sync", Toast.LENGTH_SHORT).show()
         }
     }
 

@@ -18,10 +18,29 @@ import retrofit2.http.Part
 import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
 
-/** Base URL of the shared FastAPI backend. Same server as dashboard + PWA. */
+/** Base URL of the shared FastAPI backend. Same server as dashboard + PWA.
+ *
+ * Defaults to the emulator loopback (10.0.2.2). On a physical phone the user
+ * sets their PC's LAN IP on the login screen; it is persisted and both the
+ * REST client and the WebSocket are rebuilt around it.
+ */
 object ApiConfig {
-    val BASE_URL: String get() = BuildConfig.API_BASE_URL
-    val WS_URL: String get() = BuildConfig.WS_URL
+    @Volatile var baseUrl: String = BuildConfig.API_BASE_URL
+        private set
+    @Volatile var wsUrl: String = BuildConfig.WS_URL
+        private set
+
+    /** Point the whole app at a new backend. Accepts http(s)://host[:port]. */
+    fun setUrl(url: String) {
+        val trimmed = url.trim().trimEnd('/')
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            baseUrl = trimmed
+            wsUrl = (if (trimmed.startsWith("https")) "wss" else "ws") +
+                trimmed.removePrefix("http").removePrefix("s") + "/ws/live"
+        }
+    }
+
+    fun isDefault(): Boolean = baseUrl == BuildConfig.API_BASE_URL
 }
 
 // ---------------------------------------------------------------------------
@@ -229,28 +248,36 @@ interface BhrakshakApi {
 }
 
 // ---------------------------------------------------------------------------
-// Singleton client
+// Singleton client — rebuilt when the user repoints the server on login
 // ---------------------------------------------------------------------------
 object Api {
     val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
-    private val client = OkHttpClient.Builder()
+    private fun buildClient(): OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
         .build()
 
-    val wsClient = OkHttpClient.Builder()
+    val wsClient: OkHttpClient = OkHttpClient.Builder()
         .pingInterval(20, TimeUnit.SECONDS)
         .build()
 
-    val service: BhrakshakApi by lazy {
+    @Volatile var service: BhrakshakApi = build()
+        private set
+
+    private fun build(): BhrakshakApi {
         val contentType = "application/json".toMediaType()
-        Retrofit.Builder()
-            .baseUrl(if (ApiConfig.BASE_URL.endsWith("/")) ApiConfig.BASE_URL else ApiConfig.BASE_URL + "/")
-            .client(client)
+        return Retrofit.Builder()
+            .baseUrl(if (ApiConfig.baseUrl.endsWith("/")) ApiConfig.baseUrl else ApiConfig.baseUrl + "/")
+            .client(buildClient())
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()
             .create(BhrakshakApi::class.java)
+    }
+
+    /** Rebuild Retrofit after ApiConfig.apply(newUrl). */
+    fun rebuild() {
+        service = build()
     }
 }

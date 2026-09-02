@@ -855,7 +855,10 @@ async def evaluate_zone(db: AsyncSession, zone: Zone, cell: RiskCell | None) -> 
     if cell is None:
         cell = RiskCell(
             zone_id=zone.id,
-            geom=WKTElement(f"POLYGON Z EMPTY", srid=4326),
+            # 2D EMPTY placeholder; _sync_geom copies the zone polygon in right
+            # after. "POLYGON Z EMPTY" fails on the 2D column (Z dimension
+            # mismatch) and only surfaced once cells were recreated from empty.
+            geom=WKTElement("POLYGON EMPTY", srid=4326),
             zone_code=zone.zone_code,
             name=zone.name,
             district=zone.district,

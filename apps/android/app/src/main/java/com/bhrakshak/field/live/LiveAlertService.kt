@@ -68,7 +68,7 @@ class LiveAlertService : LifecycleService() {
     }
 
     private fun connect() {
-        val request = Request.Builder().url(ApiConfig.WS_URL).build()
+        val request = Request.Builder().url(ApiConfig.wsUrl).build()
         socket = Api.wsClient.newWebSocket(request, listener)
     }
 
