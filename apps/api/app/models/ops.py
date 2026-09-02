@@ -117,3 +117,28 @@ class DisplacementSeries(Base):
     point_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     los_mm: Mapped[float | None] = mapped_column(Float)
+
+class BleSighting(Base):
+    """Aggregate BLE beacon sighting per zone-tick (crowd density proxy).
+
+    Privacy by design: the PWA reports only *hashed, rotated* device class
+    counts (Android/iOS/unknown), never MACs, never persistent IDs. One row
+    per zone per 10-minute tick. Consumed by the offline-population heatmap
+    and by rescue prioritisation when cell coverage is down.
+    """
+
+    __tablename__ = "ble_sightings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    zone_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("zones.id", ondelete="CASCADE"), index=True
+    )
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    n_devices: Mapped[int] = mapped_column(Integer)
+    n_android: Mapped[int] = mapped_column(Integer, default=0)
+    n_ios: Mapped[int] = mapped_column(Integer, default=0)
+    n_unknown: Mapped[int] = mapped_column(Integer, default=0)
+    # mean RSSI of the observed fleet: closer crowd -> higher (less negative)
+    mean_rssi: Mapped[float | None] = mapped_column(Float)
+    # how many distinct reporter devices contributed this tick
+    n_reporters: Mapped[int] = mapped_column(Integer, default=1)

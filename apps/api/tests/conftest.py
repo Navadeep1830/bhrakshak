@@ -89,6 +89,28 @@ async def client(engine):
     app.dependency_overrides.clear()
 
 
+@pytest_asyncio.fixture(scope="session")
+async def seeded_users(engine):
+    """Insert the demo users (idempotent). Shared by endpoint test modules."""
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from app.core.security import hash_password
+    from app.models import Role, User
+
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    async with Session() as s:
+        for email, name, role, pw in (
+            ("admin@bhrakshak.in", "Admin", Role.admin, "Admin@123"),
+            ("citizen@bhrakshak.in", "Citizen", Role.citizen, "Citizen@123"),
+        ):
+            exists = (await s.execute(select(User).where(User.email == email))).scalar_one_or_none()
+            if not exists:
+                s.add(User(email=email, full_name=name, role=role,
+                           hashed_password=hash_password(pw)))
+        await s.commit()
+    yield
+
+
 ADMIN = ("admin@bhrakshak.in", "Admin@123")
 CITIZEN = ("citizen@bhrakshak.in", "Citizen@123")
 
