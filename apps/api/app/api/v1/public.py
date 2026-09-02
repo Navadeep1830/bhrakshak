@@ -67,3 +67,37 @@ async def recent_checkins(db: AsyncSession = Depends(get_db)):
         )
     ).all()
     return [{"district": d or "unknown", "checkins_24h": int(n)} for d, n in rows]
+
+
+@router.get("/alerts")
+async def public_alerts(limit: int = 25, db: AsyncSession = Depends(get_db)):
+    """Sanitized recent warnings for the citizen/field apps.
+
+    The ops alert feed requires staff auth; a citizen phone in the field has
+    no staff token, so this login-free mirror serves exactly the fields the
+    alert card renders — level, text, zone, channel policy — nothing else.
+    """
+    from app.models import Alert, Zone
+
+    limit = max(1, min(limit, 50))
+    rows = (
+        await db.execute(
+            select(Alert, Zone.zone_code, Zone.district)
+            .join(Zone, Zone.id == Alert.zone_id, isouter=True)
+            .order_by(Alert.fired_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    return [
+        {
+            "id": str(a.id),
+            "level": int(a.level),
+            "message": a.message_template,
+            "lang": a.lang,
+            "channels": a.channels or [],
+            "fired_at": a.fired_at.isoformat() if a.fired_at else None,
+            "zone_code": zc,
+            "district": dist,
+        }
+        for a, zc, dist in rows
+    ]

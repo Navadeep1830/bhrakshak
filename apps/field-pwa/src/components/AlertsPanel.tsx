@@ -40,14 +40,16 @@ export function AlertsPanel({ online, onLiveAlert }: { online: boolean; onLiveAl
 
   useEffect(() => {
     let alive = true;
-    // initial fetch (online only); cache keeps it visible offline
-    fetch(`${API}/api/v1/alerts?limit=25`)
+    // initial fetch — the public mirror serves sanitized alerts without a
+    // staff token (citizen phones); ops-level details come via /ws/live.
+    fetch(`${API}/api/v1/public/alerts?limit=25`)
       .then((r) => (r.ok ? r.json() : null))
       .then((rows) => {
         if (!alive || !rows?.length) return;
         const mapped: LiveAlert[] = rows.map((a: any) => ({
-          id: String(a.id), level: a.level, message: a.message_en ?? a.message_template ?? "",
+          id: String(a.id), level: a.level, message: a.message ?? "",
           zone_code: a.zone_code, district: a.district, fired_at: a.fired_at, lang: a.lang,
+          channels: a.channels,
         }));
         setAlerts(mapped);
         saveCache(mapped);

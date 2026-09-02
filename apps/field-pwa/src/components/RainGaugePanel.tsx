@@ -14,13 +14,13 @@ interface WeatherNow {
   trend: string | null;
 }
 interface IdCheck {
-  exceeded: boolean;
-  severity: string | null;
-  rain_1h: number | null;
-  rain_24h: number | null;
-  threshold_rain_1h: number | null;
-  threshold_rain_24h: number | null;
-  margin_mm: number | null;
+  any_breach: boolean;
+  breach_1h: boolean;
+  breach_24h: boolean;
+  i_1h_observed: number | null;
+  i_1h_critical: number | null;
+  i_24h_mean_observed: number | null;
+  i_24h_critical: number | null;
 }
 interface ZoneWeather {
   zone_code: string;
@@ -129,7 +129,7 @@ export function RainGaugePanel({ token, onZoneResolved }: { token: string | null
   const series = w.series ?? [];
   const hourly = series.slice(-24).map((s) => s.rain_1h ?? 0);
   const idc = w.id_threshold_check;
-  const breach = idc?.exceeded;
+  const breach = idc?.any_breach ?? false;
   const soil = cur.soil_moisture_pct;
   const trendIcon = cur.trend === "rising" ? "▲" : cur.trend === "falling" ? "▼" : "■";
   const trendColor = cur.trend === "rising" ? "#f87171" : cur.trend === "falling" ? "#34d399" : "var(--md-on-surface-variant)";
@@ -145,9 +145,9 @@ export function RainGaugePanel({ token, onZoneResolved }: { token: string | null
 
       <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
         <Gauge label="Last hour" mm={cur.rain_1h_mm} accent={breach ? "#f87171" : undefined}
-          sub={cur.rain_1h_mm != null && idc?.threshold_rain_1h ? `threshold ${idc.threshold_rain_1h}` : undefined} />
+          sub={idc?.i_1h_critical != null ? `critical ${idc.i_1h_critical}` : undefined} />
         <Gauge label="24 hours" mm={cur.rain_24h_mm}
-          sub={cur.rain_24h_mm != null && idc?.threshold_rain_24h ? `threshold ${idc.threshold_rain_24h}` : undefined} />
+          sub={idc?.i_24h_critical != null ? `critical ${idc.i_24h_critical} (mean/h)` : undefined} />
         <Gauge label="72 hours" mm={cur.rain_72h_mm} />
       </div>
 
@@ -180,8 +180,8 @@ export function RainGaugePanel({ token, onZoneResolved }: { token: string | null
         }}>
           <span className={breach ? "md-pulse" : undefined}>●</span>
           {breach
-            ? `I-D THRESHOLD EXCEEDED (${idc.severity ?? "trigger"})`
-            : "I-D threshold: stable · margin " + (idc.margin_mm != null ? `${idc.margin_mm.toFixed(0)} mm` : "–")}
+            ? `I-D THRESHOLD EXCEEDED${idc.breach_1h ? " · 1h intensity" : ""}${idc.breach_24h ? " · 24h accumulation" : ""}`
+            : "I-D threshold: stable"}
         </div>
       )}
     </section>
