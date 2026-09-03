@@ -33,3 +33,13 @@ __pycache__/
 apps/android/app/build/
 apps/android/.gradle/
 apps/dashboard/tsconfig.tsbuildinfo
+
+# agent working dirs + local experiment artifacts
+.GLM/
+autoresearch/*.log
+autoresearch/*.json
+autoresearch/*.jsonl
+autoresearch/*.npz
+autoresearch/*.best_backup
+autoresearch/data/
+.tsbuildinfo*
