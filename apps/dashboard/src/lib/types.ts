@@ -149,9 +149,33 @@ export interface WeatherOut {
   forecast_72h: { h: number; mm: number; level: number }[];
 }
 
+export interface LoginUser {
+  email: string;
+  full_name: string;
+  role: string;
+  district: string | null;
+}
+
 export interface LoginResponse {
   access_token: string;
   refresh_token: string;
+  token_type?: string;
   role: string;
-  user: { email: string; full_name: string; role: string; district: string | null };
+  /** Demo login route embeds the profile; live FastAPI TokenOut does not. */
+  user?: LoginUser;
+}
+
+/** GET /api/v1/auth/me — live FastAPI profile (demo embeds it in login). */
+export interface MeResponse extends LoginUser {
+  id?: string;
+  preferred_lang?: string;
+}
+
+/** Normalized, backend-agnostic session consumed by the login screen. */
+export interface AuthSession {
+  token: string;
+  role: string;
+  email: string;
+  fullName: string | null;
+  district: string | null;
 }
