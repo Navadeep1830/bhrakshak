@@ -9,7 +9,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.api.v1 import alerts, analytics, auth, ble, briefing, chat, demo, evacuation, incident_command, ingest, logistics, mesh, public, reports, roads, ws, zones
+from app.api.v1 import alerts, analytics, auth, ble, briefing, chat, demo, evacuation, geo, incident_command, ingest, logistics, mesh, public, reports, roads, ws, zones
 from app.core.config import settings
 
 
@@ -60,17 +60,36 @@ app.add_middleware(
 
 for r in (auth.router, zones.router, reports.router, alerts.router, roads.router,
           demo.router, analytics.router, briefing.router, ingest.router, logistics.router,
-          incident_command.router, evacuation.router, ble.router, mesh.router, public.router, chat.router):
+          incident_command.router, evacuation.router, ble.router, mesh.router, public.router,
+          chat.router, geo.router):
     app.include_router(r, prefix="/api/v1")
 app.include_router(ws.router)  # websocket at /ws/live
 
 
+from pathlib import Path
+
 from fastapi.responses import FileResponse, JSONResponse
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
 
 @app.get("/download/apk", tags=["ops"])
 async def download_apk():
-    apk_path = "/home/sudpy/Landslide Proto/bhrakshak/bhrakshak-field-latest.apk"
-    return FileResponse(apk_path, media_type="application/vnd.android.package-archive", filename="bhrakshak-field-latest.apk")
+    """Serve the field-team Android APK from the repo root.
+
+    Previously this pointed at a developer's absolute home path and 500'd on
+    every other machine. Resolved relative to the package instead.
+    """
+    apk_path = _REPO_ROOT / "bhrakshak-field-latest.apk"
+    if not apk_path.exists():
+        return JSONResponse(
+            {"detail": "APK not found in repo root"}, status_code=404
+        )
+    return FileResponse(
+        apk_path,
+        media_type="application/vnd.android.package-archive",
+        filename="bhrakshak-field-latest.apk",
+    )
 
 
 @app.get("/health", tags=["ops"])

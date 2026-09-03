@@ -1,150 +1,155 @@
 "use client";
-
-import dynamic from "next/dynamic";
+// BhuRakshak root — login gate + view router (single-page app).
 import { useState } from "react";
-import { RotateCcw } from "lucide-react";
-
-import { endpoints } from "@/lib/api";
-import { DossierDrawer } from "@/components/dossier/DossierDrawer";
-import { LayerRail } from "@/components/map/LayerRail";
-import { Legend } from "@/components/map/Legend";
-import { RadarSlider } from "@/components/map/RadarSlider";
+import { ShieldCheck, Loader2, LogIn, Mountain, Radar, Activity, Smartphone } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
+import { api } from "@/lib/client/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import TopNav from "@/components/nav/TopNav";
+import CommandCenter from "@/components/views/CommandCenter";
+import OperationsView from "@/components/views/OperationsView";
+import AnalyticsView from "@/components/views/AnalyticsView";
+import FieldPwaView from "@/components/views/FieldPwaView";
+import ChatWidget from "@/components/chat/ChatWidget";
 
-const MapView = dynamic(() => import("@/components/map/MapView"), {
-  ssr: false,
-  loading: () => (
-    <div className="absolute inset-0 grid place-items-center">
-      <div className="flex flex-col items-center gap-3 text-muted">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
-        <span className="text-sm">loading terrain…</span>
-      </div>
-    </div>
-  ),
-});
+const QUICK_USERS = [
+  { email: "admin@bhrakshak.in", password: "Admin@123", label: "Platform Admin", hint: "everything" },
+  { email: "dc.ekh@bhrakshak.in", password: "District@123", label: "DC East Khasi Hills", hint: "district view" },
+  { email: "dc.aizawl@bhrakshak.in", password: "District@123", label: "DC Aizawl", hint: "district view" },
+  { email: "field.noney@bhrakshak.in", password: "Field@123", label: "Field Official · Noney", hint: "ops + PWA" },
+  { email: "citizen@bhrakshak.in", password: "Citizen@123", label: "Citizen · Noney", hint: "PWA view" },
+];
 
-const DISTRICTS = ["East Khasi Hills", "Noney", "Aizawl", "Gangtok", "Imphal West"];
+function Login({ onDone }: { onDone: () => void }) {
+  const [email, setEmail] = useState("admin@bhrakshak.in");
+  const [password, setPassword] = useState("Admin@123");
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  const setAuth = useAppStore((s) => s.setAuth);
 
-async function demoLogin(): Promise<string> {
-  const res = await fetch(`${endpoints.API}/api/v1/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "admin@bhrakshak.in", password: "Admin@123" }),
-  }).then((r) => r.json());
-  return res.access_token as string;
-}
-
-export default function CommandCenter() {
-  const setDemoMode = useAppStore((s) => s.setDemoMode);
-  const demoMode = useAppStore((s) => s.demoMode);
-  const [injecting, setInjecting] = useState(false);
-  const [district, setDistrict] = useState("East Khasi Hills");
-  const [result, setResult] = useState<string | null>(null);
-
-  async function injectStormFlow() {
-    setInjecting(true);
+  const signIn = async (e?: string, p?: string) => {
+    setBusy(true);
     try {
-      const token = await demoLogin();
-      const r = (await fetch(`${endpoints.API}/api/v1/demo/inject-rainfall-storm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ district, peak_mm_h: 55, hours: 3 }),
-      }).then((x) => x.json())) as {
-        zones_injected?: number;
-        zones_at_l2_plus?: number;
-      };
-      setDemoMode(true);
-      setResult(
-        `${r.zones_injected ?? 0} zones ramped · ${r.zones_at_l2_plus ?? 0} at L2+ — alerts firing`
-      );
-      setTimeout(() => window.location.reload(), 1800);
-    } catch {
-      setResult("Storm injection failed — is the API healthy?");
+      const out = await api.login(e ?? email, p ?? password);
+      setAuth({
+        token: out.access_token,
+        role: out.role,
+        email: out.user.email,
+        fullName: out.user.full_name,
+        district: out.user.district,
+      });
+      onDone();
+    } catch (err) {
+      toast({ title: "Login failed", description: String(err), variant: "destructive" });
     } finally {
-      setInjecting(false);
+      setBusy(false);
     }
-  }
-
-  async function resetFlow() {
-    setInjecting(true);
-    try {
-      const token = await demoLogin();
-      const r = (await fetch(`${endpoints.API}/api/v1/demo/reset-storm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: "{}",
-      }).then((x) => x.json())) as { deleted_obs?: number };
-      setDemoMode(false);
-      setResult(`storm cleared (${r.deleted_obs ?? 0} obs) — hysteresis relaxed`);
-      setTimeout(() => window.location.reload(), 1800);
-    } catch {
-      setResult("Reset failed — is the API healthy?");
-    } finally {
-      setInjecting(false);
-    }
-  }
+  };
 
   return (
-    <>
-      <MapView />
-      <LayerRail />
-      <Legend />
-
-      {/* Demo control — the judge button */}
-      <div
-        className="anim anim-fade absolute bottom-4 left-3 z-10 flex items-center gap-3 rounded-xl border border-orange-800 bg-panel/90 p-3 shadow-2xl shadow-black/50 backdrop-blur-md"
-        style={{ animationDelay: "0.9s" }}
-      >
-        <select
-          value={district}
-          onChange={(e) => setDistrict(e.target.value)}
-          className="rounded-lg border border-edge bg-bg px-2 py-2 text-[12px] font-semibold text-ink outline-none"
-          aria-label="storm district"
-        >
-          {DISTRICTS.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={injectStormFlow}
-          disabled={injecting}
-          className="rounded-lg bg-orange-600 px-4 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-orange-900/40 transition-colors hover:bg-orange-500 disabled:opacity-60"
-        >
-          {injecting ? (
-            <span className="flex items-center gap-2">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-              Injecting…
-            </span>
-          ) : (
-            "⛈ Inject Monsoon Cell (Demo)"
-          )}
-        </button>
-        <button
-          onClick={resetFlow}
-          disabled={injecting}
-          title="Reset demo state to the seeded monsoon posture"
-          className="grid h-9 w-9 place-items-center rounded-lg border border-edge text-muted transition-colors hover:text-ink"
-          aria-label="reset demo"
-        >
-          <RotateCcw size={14} />
-        </button>
-        <div className="max-w-[240px]">
-          <p className="text-[11px] leading-snug text-muted">
-            synthetic extreme rainfall → live threshold+hysteresis pipeline → escalation &amp; multilingual alerts
-          </p>
-          {result && <p className="mt-0.5 text-[10px] font-semibold text-orange-300">{result}</p>}
+    <div className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: "radial-gradient(1200px 600px at 70% -10%, color-mix(in srgb, var(--surface-container-high) 70%, var(--surface)) 0%, var(--surface) 60%)" }}>
+      <div className="w-full max-w-4xl grid md:grid-cols-2 gap-6 items-stretch">
+        {/* brand panel */}
+        <div className="hidden md:flex flex-col justify-between rounded-xl border border-outline-variant/60 bg-surface-low/80 p-8 elevation-1">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-lg bg-primary-container grid place-items-center elevation-1">
+                <ShieldCheck className="h-6 w-6 text-on-primary-container" />
+              </div>
+              <div>
+                <div className="text-headline-sm font-medium tracking-tight">भूरक्षक</div>
+                <div className="text-label-md tracking-[0.25em] text-primary">BHURAKSHAK</div>
+              </div>
+            </div>
+            <p className="mt-6 text-body-md leading-6 text-on-surface-variant">
+              AI-Based Early Warning &amp; Landslide Risk Monitoring System for the
+              North Eastern Region. Four fused layers — susceptibility, hazard
+              nowcast, PSInSAR deformation, exposure — one ranked response queue.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-8">
+            {[
+              { icon: Mountain, t: "43 zones · 6 districts", s: "Model A hexes" },
+              { icon: Radar, t: "I-D + ML fusion", s: "hysteresis ladder" },
+              { icon: Activity, t: "8 languages", s: "SMS / IVR / siren" },
+              { icon: Smartphone, t: "Offline-first PWA", s: "sync + dedupe" },
+            ].map(({ icon: Icon, t, s }) => (
+              <div key={t} className="rounded-md border border-outline-variant/50 bg-surface-container p-3.5">
+                <Icon className="h-4 w-4 text-primary mb-2" />
+                <div className="text-label-lg">{t}</div>
+                <div className="text-label-sm text-on-surface-variant/70">{s}</div>
+              </div>
+            ))}
+          </div>
+          <div className="text-label-sm text-on-surface-variant/60 mt-6">SIH 26001 · MDoNER · Disaster Management</div>
         </div>
-        {demoMode && (
-          <span className="animate-pulse rounded-lg bg-orange-900 px-2 py-1 text-[11px] font-bold text-orange-300">
-            DEMO MODE
-          </span>
-        )}
-      </div>
 
-      <RadarSlider />
-      <DossierDrawer />
-    </>
+        {/* login card */}
+        <div className="rounded-xl border border-outline-variant/60 bg-surface-low p-8 flex flex-col elevation-2">
+          <h1 className="text-title-lg font-medium">Sign in to Command Center</h1>
+          <p className="text-body-sm text-on-surface-variant mt-1">Demo instance — pick a role or type credentials.</p>
+
+          <div className="mt-6 space-y-2">
+            {QUICK_USERS.map((u) => (
+              <button
+                key={u.email}
+                onClick={() => { setEmail(u.email); setPassword(u.password); signIn(u.email, u.password); }}
+                disabled={busy}
+                className="w-full flex items-center justify-between rounded-md border border-outline-variant/60 bg-surface-container px-4 py-3 text-left state-layer hover:border-primary/60 transition-colors disabled:opacity-40"
+              >
+                <div>
+                  <div className="text-body-md font-medium">{u.label}</div>
+                  <div className="text-label-md text-on-surface-variant/70">{u.email}</div>
+                </div>
+                <span className="text-label-sm uppercase tracking-wider text-primary/80">{u.hint}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-label-lg">Email</Label>
+              <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-label-lg">Password</Label>
+              <Input id="password" type="password" value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && signIn()} />
+            </div>
+            <Button onClick={() => signIn()} disabled={busy} className="w-full">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+              Sign in
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Page() {
+  const { token, role, view } = useAppStore();
+  const [ready, setReady] = useState(false);
+  if (!token) return <Login onDone={() => setReady(true)} />;
+
+  const isCitizen = role === "citizen";
+  const active = isCitizen ? "pwa" : view;
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <TopNav />
+      <main className="flex-1 flex flex-col">
+        {active === "command" && <CommandCenter />}
+        {active === "operations" && <OperationsView />}
+        {active === "analytics" && <AnalyticsView />}
+        {active === "pwa" && <FieldPwaView />}
+      </main>
+      <ChatWidget />
+    </div>
   );
 }

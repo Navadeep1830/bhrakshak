@@ -1,99 +1,56 @@
 "use client";
-
-import { AlertTriangle, Radio, Siren, Wifi } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-
-import { apiGet } from "@/lib/api";
+// KPI bar — 5 live metrics over the map (Material 3 tonal cards).
+import { TriangleAlert, BellRing, Inbox, Wifi, LayoutGrid } from "lucide-react";
+import { usePoll } from "@/hooks/use-poll";
+import { api } from "@/lib/client/api";
 import type { KpisOut } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-function useCountUp(target: number | null | undefined, duration = 1100) {
-  const [val, setVal] = useState(0);
-  const prev = useRef(0);
-  useEffect(() => {
-    if (target == null) return;
-    const from = prev.current;
-    const t0 = performance.now();
-    let raf: number;
-    const tick = (now: number) => {
-      const p = Math.min((now - t0) / duration, 1);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setVal(from + (target - from) * eased);
-      if (p < 1) raf = requestAnimationFrame(tick);
-      else prev.current = target;
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return val;
-}
+const CARDS: {
+  key: keyof KpisOut; label: string; icon: any; hint: string;
+  danger?: (v: number) => boolean;
+}[] = [
+  { key: "zones_l3_l4", label: "Zones L3/L4", icon: TriangleAlert, hint: "warning + emergency", danger: (v) => v > 0 },
+  { key: "alerts_today", label: "Alerts (24h)", icon: BellRing, hint: "SMS / app / IVR / siren", danger: (v) => v > 25 },
+  { key: "pending_reports", label: "Pending reports", icon: Inbox, hint: "awaiting verification" },
+  { key: "sensors_online", label: "IoT sensors", icon: Wifi, hint: "soil-moisture mesh" },
+  { key: "total_zones", label: "Response zones", icon: LayoutGrid, hint: "6 NER districts" },
+];
 
-function Stat({ icon: Icon, label, value, cls }: {
-  icon: typeof Siren; label: string; value: number | null; cls: string;
-}) {
-  const n = useCountUp(value);
+export default function KpiBar() {
+  const { data } = usePoll<KpisOut>(api.kpis, 6000);
+
   return (
-    <div className="hidden items-center gap-2.5 md:flex">
-      <span className={cn("grid h-8 w-8 place-items-center rounded-lg bg-bg/80 ring-1 ring-edge", cls)}>
-        <Icon size={15} />
-      </span>
-      <div className="leading-none">
-        <div className={cn("text-lg font-bold tabular-nums tracking-tight", cls)}>
-          {value == null ? "–" : Math.round(n).toLocaleString()}
-        </div>
-        <div className="mt-0.5 text-[10px] font-medium uppercase tracking-widest text-muted">{label}</div>
-      </div>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {CARDS.map(({ key, label, icon: Icon, hint, danger }) => {
+        const v = data?.[key] ?? 0;
+        const isDanger = danger?.(v) ?? false;
+        return (
+          <div
+            key={key}
+            className={cn(
+              "rounded-lg border p-3.5 flex items-center gap-3.5 elevation-1 transition-shadow duration-200 hover:elevation-2",
+              isDanger
+                ? "bg-error-container border-outline-variant/60 text-on-error-container"
+                : "bg-surface-low border-outline-variant/60 text-on-surface",
+            )}
+          >
+            <div
+              className={cn(
+                "h-11 w-11 rounded-full grid place-items-center shrink-0",
+                isDanger ? "bg-error text-on-error" : "bg-secondary-container text-on-secondary-container",
+              )}
+            >
+              <Icon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-headline-sm font-medium leading-none tabular-nums">{v}</div>
+              <div className="text-label-md text-on-surface-variant truncate">{label}</div>
+              <div className="text-label-sm text-on-surface-variant/60 truncate">{hint}</div>
+            </div>
+          </div>
+        );
+      })}
     </div>
-  );
-}
-
-export function KpiBar() {
-  const [kpis, setKpis] = useState<KpisOut | null>(null);
-  const [live, setLive] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    const load = () =>
-      apiGet<KpisOut>("/api/v1/analytics/kpis")
-        .then((k) => alive && (setKpis(k), setLive(true)))
-        .catch(() => alive && setLive(false));
-    load();
-    const t = setInterval(load, 15000);
-    return () => { alive = false; clearInterval(t); };
-  }, []);
-
-  const items = [
-    { icon: Siren, label: "Zones L3/L4", value: kpis?.zones_l3_l4 ?? null, cls: "text-l4" },
-    { icon: Radio, label: "Alerts (24h)", value: kpis?.alerts_today ?? null, cls: "text-l2" },
-    { icon: AlertTriangle, label: "Reports pending", value: kpis?.pending_reports ?? null, cls: "text-l1" },
-    { icon: Wifi, label: "Sensors online", value: kpis?.sensors_online ?? null, cls: "text-l0" },
-  ];
-
-  return (
-    <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-white/5 bg-panel px-4">
-      <div className="flex items-center gap-7">
-        <div className="flex items-baseline gap-2">
-          <span className="text-lg font-extrabold tracking-tight">
-            Bhu<span className="text-orange-500">Rakshak</span>
-            <span className="font-playfair italic text-muted"> · भूरक्षक</span>
-          </span>
-          <span className="hidden rounded-full bg-edge px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-muted lg:inline">
-            MDoNER · SIH26001
-          </span>
-        </div>
-        {items.map(({ icon, label, value, cls }) => (
-          <Stat key={label} icon={icon} label={label} value={value} cls={cls} />
-        ))}
-      </div>
-      <div
-        className={cn(
-          "flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-bold ring-1",
-          live ? "bg-emerald-950/70 text-l0 ring-l0/30" : "bg-edge/60 text-muted ring-white/10"
-        )}
-      >
-        <span className={cn("h-1.5 w-1.5 rounded-full", live ? "glow-pulse bg-l0" : "bg-muted")} />
-        {live ? "LIVE" : "FIXTURE MODE"}
-      </div>
-    </header>
   );
 }

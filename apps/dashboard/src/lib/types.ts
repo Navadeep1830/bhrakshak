@@ -1,3 +1,4 @@
+// Shared DTO types between the in-app API and the client views.
 export interface KpisOut {
   zones_l3_l4: number;
   alerts_today: number;
@@ -7,109 +8,150 @@ export interface KpisOut {
 }
 
 export interface DdmaSop {
-  dept: string;
-  task: string;
+  id: string;
+  label: string;
+  detail: string;
 }
 
 export interface DcDirective {
-  level: number;
-  urgency: string;
-  headline: string;
-  evacuation_plan: string;
-  ndrf_deployment: string;
-  machinery_positioning: string;
-  traffic_advisory: string;
-  medical_standby: string;
-  demographics?: {
-    total_population: number;
-    elderly_count: number;
-    children_under_5: number;
-    special_needs: number;
-    ambulances_assigned: number;
-  };
-  ddma_sop_checklist?: DdmaSop[];
+  zone_code: string;
+  sop_id: string;
+  status: string;
 }
 
 export interface Driver {
   feature: string;
-  name?: string;
-  value: string | number;
-  val_num?: number;
+  name: string;
+  value: string;
+  val_num: number;
   contribution: number;
-  description?: string;
+  description: string;
 }
 
 export interface ZoneOut {
   id: string;
   zone_code: string;
-  name: string | null;
-  district: string | null;
-  state: string | null;
-  susc_mean: number | null;
-  susc_p90: number | null;
-  population: number | null;
-  road_km: number | null;
+  name: string;
+  district: string;
+  state: string;
   hazard_level: number;
-  prob_24h: number | null;
+  susc_mean: number;
+  susc_p90: number;
+  prob_24h: number;
+  population: number;
+  road_km: number;
 }
 
 export interface Dossier {
-  zone: ZoneOut;
-  rainfall_series: { ts: string; rain_1h: number | null; rain_24h: number | null; eff_rain?: number | null; soil_moisture?: number | null }[];
-  sensors: { sensor_id: string; ts: string; soil_moisture: number | null }[];
-  reports: { id: string; category: string; status: string; created_at: string }[];
-  alerts: { level: number; fired_at: string; message: string }[];
+  zone: ZoneOut & {
+    center: [number, number];
+    rain_intensity: number;
+    rain_24h: number;
+    antecedent: number;
+    soil_moisture: number;
+    creep_mm_year: number;
+    isolation_score: number;
+    flood_index: number;
+    road_class: string;
+    threshold_tier: number;
+    ml_tier: number;
+    history: { t: number; level: number; rain: number; prob: number }[];
+  };
   drivers: Driver[];
-  historical_events: unknown[];
-  flood_level?: number;
-  isolation?: number;
-  dc_directive?: DcDirective | null;
+  reports: {
+    id: number;
+    type: string;
+    note: string;
+    status: string;
+    verdict?: { label: string; confidence: number };
+    created_at: number;
+  }[];
+  weather: {
+    intensity_mm_h: number;
+    duration_min: number;
+    band: string;
+    threshold: [number, number, number][];
+    check: string;
+    forecast_72h: { h: number; mm: number; level: number }[];
+  };
+  briefing_md: string;
 }
 
 export interface TickerEvent {
-  type: string;
-  zone_code?: string;
-  name?: string;
+  id: number;
+  kind: string;
+  text: string;
+  ts: number;
   level?: number;
-  message?: string;
-  ts?: string;
+  zone_code?: string;
 }
 
 export interface PriorityRow {
   zone_id: string;
-  zone_code: string | null;
-  name: string | null;
-  district: string | null;
-  hazard_level: number;
-  flood_level: number;
-  susc_mean: number | null;
-  population: number | null;
-  road_km: number | null;
+  zone_code: string;
+  name: string;
+  district: string;
+  level: number;
+  population: number;
   isolation: number;
-  score: number;
-  reasons: string[];
-  recommended_action: string;
+  roads_blocked: number;
+  priority: number;
+  sops: DdmaSop[];
+  team: string | null;
+  status: "open" | "directed" | "assigned";
 }
 
 export interface RegistryRow {
-  id: number;
-  name: string;
-  version: string;
-  git_sha: string | null;
-  metrics: Record<string, unknown>;
-  artifact_uri: string | null;
-  notes: string | null;
-  trained_at: string;
+  model: string;
+  layer: string;
+  approach: string;
+  val_metric: string;
+  status: string;
+  note: string;
 }
 
 export interface AlertRow {
-  id: string;
-  zone_id: string;
+  id: number;
+  zone_code: string;
+  zone_name: string;
+  district: string;
   level: number;
-  lang: string;
-  channels: string[] | null;
-  recipients: number;
-  message_template: string | null;
-  ack_at: string | null;
-  fired_at: string;
+  message: string;
+  channels: string[];
+  created_at: number;
+  ack: boolean;
+  ack_by?: string;
+}
+
+export interface ReportOut {
+  id: number;
+  zone_code: string;
+  type: string;
+  note: string;
+  status: string;
+  lat: number;
+  lon: number;
+  verdict?: { label: string; confidence: number };
+  created_at: number;
+  reporter: string;
+}
+
+export interface WeatherOut {
+  zone: { zone_code: string; name: string; district: string; level: number };
+  current: { intensity_mm_h: number; rain_24h: number; soil_moisture: number; antecedent: number };
+  id_check: {
+    band: string;
+    duration_min: number;
+    thresholds: [number, number, number][];
+    tier: number;
+    verdict: string;
+  };
+  forecast_72h: { h: number; mm: number; level: number }[];
+}
+
+export interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  role: string;
+  user: { email: string; full_name: string; role: string; district: string | null };
 }

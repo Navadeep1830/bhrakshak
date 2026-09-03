@@ -43,3 +43,7 @@ autoresearch/*.npz
 autoresearch/*.best_backup
 autoresearch/data/
 .tsbuildinfo*
+
+# local python venv (backend dev)
+apps/api/.venv/
+.venv/

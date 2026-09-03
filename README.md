@@ -59,7 +59,7 @@ Run full-fidelity landslide simulations locally or via the dashboard:
    ```bash
    python demo/storm_injector.py --district "East Khasi Hills" --peak 60 --hours 3
    ```
-   Or click **"⛈ Inject Monsoon Cell (Demo)"** on the dashboard bottom-left (`http://localhost:3000`):
+   Or click **"Inject demo storm"** on the Command Center map (`http://localhost:3000`, sign in as admin — quick-pick):
    zones escalate amber→red, alerts fire on live ticker, SMS templates render in 8 languages, and roads flip to blocked state.
 
 Pilot districts: **Aizawl (MZ), East Khasi Hills (ML), Noney + Imphal West (MN), Gangtok (SK)** — zone codes like `ML-EKH-004`.
@@ -71,7 +71,8 @@ apps/api       FastAPI · async SQLAlchemy 2.0 · pydantic v2 · JWT refresh rot
                RBAC (admin/district_admin/field_official/citizen) · slowapi limits
 apps/worker    Celery beat: rainfall poll 15m · risk recompute 15m · seismic 1h
                MQTT bridge for sensors/#  →  sensor_readings hypertable
-apps/dashboard Next.js 14 · TS · Tailwind · MapLibre GL · ECharts (SHAP waterfall)
+apps/dashboard Next.js 16 · Material Design 3 (Material You) · MapLibre GL 6 hex map ·
+               ECharts · dual-mode: standalone demo API (zero infra) or live FastAPI
 apps/field-pwa Vite PWA · Workbox offline · Dexie queue · idempotent batch sync
 apps/android   Native Android Kotlin app · Room offline queue · WorkManager sync
 ml/            ingest (dem/inventory/weather) · features · models A–E · backtest

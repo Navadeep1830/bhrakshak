@@ -1,36 +1,37 @@
 "use client";
+// Map legend — hazard levels + aux layers (M3 elevated card).
+import { LEVEL_COLORS, LEVEL_LABELS } from "@/store/useAppStore";
 
-import { LEVEL_COLORS, LEVEL_NAMES } from "@/lib/utils";
-
-export function Legend() {
+export default function Legend({ demoMode }: { demoMode?: boolean }) {
   return (
-    <div
-      className="anim anim-fade absolute bottom-4 right-3 z-10 rounded-xl border border-white/5 bg-panel/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md"
-      style={{ animationDelay: "0.5s" }}
-    >
-      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-muted">
-        Hazard level (fused)
+    <div className="rounded-lg border border-outline-variant/60 bg-surface-low/95 backdrop-blur p-3.5 text-xs elevation-2">
+      <div className="text-label-lg text-on-surface mb-2.5 flex items-center gap-2">
+        Hazard level
+        {demoMode && (
+          <span className="text-label-sm px-2 py-0.5 rounded-full bg-error-container text-on-error-container border border-outline-variant/50">
+            DEMO STORM
+          </span>
+        )}
       </div>
-      <div className="grid grid-cols-5 gap-1.5">
-        {[0, 1, 2, 3, 4].map((l) => (
-          <div key={l} className="flex flex-col items-center gap-1">
-            <span
-              className="h-3.5 w-7 rounded"
-              style={{ background: LEVEL_COLORS[l], boxShadow: `0 0 10px ${LEVEL_COLORS[l]}55` }}
-            />
-            <span className="text-[9px] font-semibold text-muted">L{l}</span>
-            <span className="text-[8px] text-muted/70">{LEVEL_NAMES[l]}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-2 flex items-center gap-2 border-t border-edge/70 pt-1.5">
-        <span className="h-2.5 w-2.5 rounded-full border-2 border-bg" style={{ background: "#38BDF8" }} />
-        <span className="text-[10px] text-slate-300">Citizen report</span>
-        <span className="h-2.5 w-2.5 rounded-full border-2 border-bg" style={{ background: "#10B981" }} />
-        <span className="text-[10px] text-slate-300">Shelter</span>
-      </div>
-      <div className="mt-1 text-[9px] leading-relaxed text-muted/80">
-        I-D thresholds × ML nowcast · hysteresis 2↑/3↓
+      {LEVEL_COLORS.map((c, i) => (
+        <div key={i} className="flex items-center gap-2.5 py-0.5">
+          <span className="h-3 w-6 rounded-xs border border-black/30" style={{ background: c, opacity: 0.55 + i * 0.11 }} />
+          <span className={i >= 3 ? "text-on-surface font-medium" : "text-on-surface-variant"}>{LEVEL_LABELS[i]}</span>
+        </div>
+      ))}
+      <div className="mt-2.5 pt-2.5 border-t border-outline-variant/60 space-y-1.5">
+        <div className="flex items-center gap-2.5 text-label-sm text-on-surface-variant">
+          <span className="h-0.5 w-6" style={{ background: "repeating-linear-gradient(90deg,#06B6D4 0 4px,transparent 4px 7px)" }} />
+          PSInSAR creep &gt;20 mm/yr
+        </div>
+        <div className="flex items-center gap-2.5 text-label-sm text-on-surface-variant">
+          <span className="h-2 w-6 rounded-xs" style={{ background: "linear-gradient(90deg,#164E63,#0891B2,#F59E0B,#EF4444)", opacity: 0.6 }} />
+          Rainfall radar mm/h
+        </div>
+        <div className="flex items-center gap-2.5 text-label-sm text-on-surface-variant">
+          <span className="h-0.5 w-6 bg-risk-4" />
+          blocked road
+        </div>
       </div>
     </div>
   );

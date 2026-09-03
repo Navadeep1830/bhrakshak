@@ -1,69 +1,316 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Playfair+Display:ital,wght@1,400;1,500;1,600&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@custom-variant dark (&:is(.dark *));
 
+/* ==================================================================
+   Material Design 3 (Material You) design system — BhuRakshak edition
+   Full M3 token set: color roles, tonal surfaces, elevation, shape,
+   typography scale, state layers, motion. Dark scheme is the default
+   (command-center ops); light scheme available via .light toggle.
+   ================================================================== */
+
+@theme inline {
+  /* ---- M3 color roles → Tailwind utilities (bg-*, text-*, border-*) ---- */
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-secondary: var(--secondary);
+  --color-on-secondary: var(--on-secondary);
+  --color-secondary-container: var(--secondary-container);
+  --color-on-secondary-container: var(--on-secondary-container);
+  --color-tertiary: var(--tertiary);
+  --color-on-tertiary: var(--on-tertiary);
+  --color-tertiary-container: var(--tertiary-container);
+  --color-on-tertiary-container: var(--on-tertiary-container);
+  --color-error: var(--error);
+  --color-on-error: var(--on-error);
+  --color-error-container: var(--error-container);
+  --color-on-error-container: var(--on-error-container);
+  --color-surface: var(--surface);
+  --color-on-surface: var(--on-surface);
+  --color-surface-variant: var(--surface-variant);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-surface-lowest: var(--surface-container-lowest);
+  --color-surface-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-high: var(--surface-container-high);
+  --color-surface-highest: var(--surface-container-highest);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-inverse-surface: var(--inverse-surface);
+  --color-inverse-on-surface: var(--inverse-on-surface);
+  --color-inverse-primary: var(--inverse-primary);
+
+  /* ---- legacy shadcn bridge (mapped onto M3 roles) ---- */
+  --color-background: var(--surface);
+  --color-foreground: var(--on-surface);
+  --color-card: var(--surface-container-low);
+  --color-card-foreground: var(--on-surface);
+  --color-popover: var(--surface-container-high);
+  --color-popover-foreground: var(--on-surface);
+  --color-muted: var(--surface-container-high);
+  --color-muted-foreground: var(--on-surface-variant);
+  --color-accent: var(--secondary-container);
+  --color-accent-foreground: var(--on-secondary-container);
+  --color-destructive: var(--error);
+  --color-border: var(--outline-variant);
+  --color-input: var(--outline);
+  --color-ring: var(--primary);
+
+  /* ---- domain risk ramp (L0..L4) ---- */
+  --color-risk-0: #0e9f6e;
+  --color-risk-1: #22c55e;
+  --color-risk-2: #eab308;
+  --color-risk-3: #f97316;
+  --color-risk-4: #ef4444;
+
+  /* ---- M3 typography scale (Roboto) ---- */
+  --font-sans: var(--font-roboto), "Roboto", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
+  --text-display-lg: 3.5625rem;  --text-display-lg--line-height: 4rem;
+  --text-display-md: 2.8125rem;  --text-display-md--line-height: 3.25rem;
+  --text-display-sm: 2.25rem;    --text-display-sm--line-height: 2.75rem;
+  --text-headline-lg: 2rem;      --text-headline-lg--line-height: 2.5rem;
+  --text-headline-md: 1.75rem;   --text-headline-md--line-height: 2.25rem;
+  --text-headline-sm: 1.5rem;    --text-headline-sm--line-height: 2rem;
+  --text-title-lg: 1.375rem;     --text-title-lg--line-height: 1.75rem;
+  --text-title-md: 1rem;         --text-title-md--line-height: 1.5rem;  --text-title-md--font-weight: 500;
+  --text-title-sm: 0.875rem;     --text-title-sm--line-height: 1.25rem; --text-title-sm--font-weight: 500;
+  --text-body-lg: 1rem;          --text-body-lg--line-height: 1.5rem;
+  --text-body-md: 0.875rem;      --text-body-md--line-height: 1.25rem;
+  --text-body-sm: 0.75rem;       --text-body-sm--line-height: 1rem;
+  --text-label-lg: 0.875rem;     --text-label-lg--line-height: 1.25rem; --text-label-lg--font-weight: 500;
+  --text-label-md: 0.75rem;      --text-label-md--line-height: 1rem;    --text-label-md--font-weight: 500;
+  --text-label-sm: 0.6875rem;    --text-label-sm--line-height: 1rem;    --text-label-sm--font-weight: 500;
+
+  /* ---- M3 shape scale ---- */
+  --radius-xs: 4px;   /* chips small */
+  --radius-sm: 8px;   /* small elements */
+  --radius-md: 12px;  /* cards, menus */
+  --radius-lg: 16px;  /* large cards, sheets */
+  --radius-xl: 28px;  /* dialogs, side sheets */
+
+  /* ---- motion ---- */
+  --ease-m3-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-m3-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
+/* ---------------- M3 LIGHT scheme ---------------- */
 :root {
+  --primary: #356b44;
+  --on-primary: #ffffff;
+  --primary-container: #adf5b8;
+  --on-primary-container: #00210e;
+  --secondary: #4c6355;
+  --on-secondary: #ffffff;
+  --secondary-container: #cfe9d3;
+  --on-secondary-container: #092013;
+  --tertiary: #7a5900;
+  --on-tertiary: #ffffff;
+  --tertiary-container: #ffdf9e;
+  --on-tertiary-container: #251a00;
+  --error: #ba1a1a;
+  --on-error: #ffffff;
+  --error-container: #ffdad6;
+  --on-error-container: #410002;
+  --surface: #f7faf3;
+  --on-surface: #191c19;
+  --surface-variant: #dee3db;
+  --on-surface-variant: #414941;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f1f4ec;
+  --surface-container: #ebeee3;
+  --surface-container-high: #e5e8de;
+  --surface-container-highest: #dfe3d8;
+  --outline: #71796f;
+  --outline-variant: #c1c9be;
+  --inverse-surface: #2b322d;
+  --inverse-on-surface: #f0f1ec;
+  --inverse-primary: #8bd89e;
+  --chart-1: #356b44;
+  --chart-2: #0e7490;
+  --chart-3: #b08a2e;
+  --chart-4: #d97706;
+  --chart-5: #dc2626;
+  --m3-shadow-tone: 0 20 8;
+  color-scheme: light;
+}
+
+/* ---------------- M3 DARK scheme (default) ---------------- */
+.dark {
+  --primary: #8bd89e;
+  --on-primary: #00391b;
+  --primary-container: #005227;
+  --on-primary-container: #a9f5b6;
+  --secondary: #a6cab2;
+  --on-secondary: #10301a;
+  --secondary-container: #264630;
+  --on-secondary-container: #c2e9cd;
+  --tertiary: #e5c46b;
+  --on-tertiary: #3f2e00;
+  --tertiary-container: #5b4300;
+  --on-tertiary-container: #ffdf9e;
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --error-container: #93000a;
+  --on-error-container: #ffdad6;
+  --surface: #0f1512;
+  --on-surface: #dee3db;
+  --surface-variant: #414941;
+  --on-surface-variant: #c1c9be;
+  --surface-container-lowest: #0a0f0c;
+  --surface-container-low: #161d19;
+  --surface-container: #1a211d;
+  --surface-container-high: #252b27;
+  --surface-container-highest: #303631;
+  --outline: #8b938a;
+  --outline-variant: #414941;
+  --inverse-surface: #dee3db;
+  --inverse-on-surface: #2b322d;
+  --inverse-primary: #356b44;
+  --chart-1: #8bd89e;
+  --chart-2: #6ec8e0;
+  --chart-3: #e5c46b;
+  --chart-4: #f2994a;
+  --chart-5: #ef4444;
+  --m3-shadow-tone: 0 0 0;
   color-scheme: dark;
 }
 
-* { font-family: 'Inter', system-ui, sans-serif; }
-.font-playfair { font-family: 'Playfair Display', serif; }
-
-body {
-  @apply bg-bg text-ink antialiased tracking-[-0.01em];
+@layer base {
+  * {
+    @apply border-outline-variant outline-primary/50;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-surface text-on-surface font-sans antialiased;
+    font-feature-settings: "kern", "liga";
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 30%, transparent);
+  }
 }
 
-/* ---------- cinematic entrance system ---------- */
-@keyframes rise { 0%{opacity:0;transform:translateY(26px);filter:blur(12px)} 100%{opacity:1;transform:translateY(0);filter:blur(0)} }
-@keyframes fadeUp { 0%{opacity:0;transform:translateY(16px)} 100%{opacity:1;transform:translateY(0)} }
-@keyframes kenBurns { 0%{transform:scale(1.1)} 100%{transform:scale(1)} }
-@keyframes glowPulse { 0%,100%{opacity:.55} 50%{opacity:1} }
-@keyframes slideInRight { 0%{opacity:0;transform:translateX(36px)} 100%{opacity:1;transform:translateX(0)} }
+/* ================= M3 component utilities ================= */
 
-.anim { opacity:0; animation-fill-mode:forwards; animation-timing-function:cubic-bezier(0.16,1,0.3,1); }
-.anim-rise { animation-name:rise; animation-duration:.9s; }
-.anim-fade { animation-name:fadeUp; animation-duration:.8s; }
-.anim-slide { animation-name:slideInRight; animation-duration:.6s cubic-bezier(0.16,1,0.3,1); }
-.anim-zoom { animation:kenBurns 2s cubic-bezier(0.16,1,0.3,1) forwards; }
-.glow-pulse { animation:glowPulse 2.6s ease-in-out infinite; }
+/* Elevation levels 0-5 (tinted shadows, M3 spec) — @utility so
+   variants like hover:elevation-1 work in Tailwind 4. */
+@utility elevation-0 { box-shadow: none; }
+@utility elevation-1 { box-shadow: 0 1px 2px rgb(var(--m3-shadow-tone) / 0.30), 0 1px 3px 1px rgb(var(--m3-shadow-tone) / 0.15); }
+@utility elevation-2 { box-shadow: 0 1px 2px rgb(var(--m3-shadow-tone) / 0.30), 0 2px 6px 2px rgb(var(--m3-shadow-tone) / 0.15); }
+@utility elevation-3 { box-shadow: 0 4px 8px 3px rgb(var(--m3-shadow-tone) / 0.15), 0 1px 3px rgb(var(--m3-shadow-tone) / 0.30); }
+@utility elevation-4 { box-shadow: 0 6px 10px 4px rgb(var(--m3-shadow-tone) / 0.15), 0 2px 3px rgb(var(--m3-shadow-tone) / 0.30); }
+@utility elevation-5 { box-shadow: 0 8px 12px 6px rgb(var(--m3-shadow-tone) / 0.15), 0 4px 4px rgb(var(--m3-shadow-tone) / 0.30); }
 
-@media (prefers-reduced-motion: reduce){ .anim,.anim-zoom,.glow-pulse{animation:none!important;opacity:1!important} }
+@layer utilities {
+  /* M3 state layer — hover 8% / focus 10% / press 10% of currentColor */
+  .state-layer { position: relative; }
+  .state-layer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 150ms var(--ease-m3-standard);
+    pointer-events: none;
+  }
+  .state-layer:hover::after { opacity: 0.08; }
+  .state-layer:focus-visible::after { opacity: 0.10; }
+  .state-layer:active::after { opacity: 0.10; }
+  .state-layer:disabled::after, .state-layer[disabled]::after { opacity: 0 !important; }
 
-/* ---------- ambient background aurora ---------- */
-.aurora {
-  position:absolute; inset:0; pointer-events:none; z-index:0;
-  background:
-    radial-gradient(600px 320px at 18% -10%, rgba(249,115,22,.14), transparent 60%),
-    radial-gradient(700px 380px at 85% 0%, rgba(56,189,248,.10), transparent 60%),
-    radial-gradient(520px 300px at 60% 110%, rgba(168,85,247,.10), transparent 60%);
+  /* M3 emphasized motion helpers */
+  .m3-motion { transition-property: color, background-color, border-color, box-shadow, transform, opacity; transition-duration: 200ms; transition-timing-function: var(--ease-m3-standard); }
+
+  /* M3-style tonal icon chip (leading icon in cards/rows) */
+  .m3-icon-chip {
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-full, 9999px);
+    flex-shrink: 0;
+  }
+
+  /* ripple-free press scale */
+  .m3-press { transition: transform 120ms var(--ease-m3-standard); }
+  .m3-press:active { transform: scale(0.97); }
 }
 
-/* ---------- glass panels ---------- */
-.glass {
-  background: rgba(17,26,44,.72);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255,255,255,.07);
+/* ================= BhuRakshak app + MapLibre styling ================= */
+.bhu .maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--surface) 75%, transparent) !important;
+  color: var(--on-surface-variant) !important;
+  font-size: 10px;
 }
+.bhu .maplibregl-ctrl-attrib a { color: var(--on-surface-variant); }
+.bhu .maplibregl-ctrl-scale {
+  background: color-mix(in srgb, var(--surface) 75%, transparent) !important;
+  color: var(--on-surface) !important;
+  border-color: var(--outline) !important;
+}
+.bhu .maplibregl-ctrl-group {
+  background: var(--surface-container-low) !important;
+  border-radius: var(--radius-sm) !important;
+  overflow: hidden;
+  box-shadow: 0 1px 3px 1px rgb(var(--m3-shadow-tone) / 0.15);
+}
+.bhu .maplibregl-ctrl-group button {
+  border-color: var(--outline-variant) !important;
+}
+.bhu .maplibregl-ctrl-group button span { filter: invert(0.85); }
+.bhu .maplibregl-popup-content {
+  background: var(--surface-container-low) !important;
+  color: var(--on-surface) !important;
+  border: 1px solid var(--outline-variant) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 10px 14px !important;
+  font-size: 12px !important;
+  box-shadow: 0 4px 8px 3px rgb(var(--m3-shadow-tone) / 0.15);
+}
+.bhu .maplibregl-popup-tip { border-top-color: var(--surface-container-low) !important; }
+.bhu .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--surface-container-low) !important; }
+.bhu .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--surface-container-low) !important; }
+.bhu .maplibregl-canvas:focus { outline: none; }
 
-.maplibregl-ctrl-attrib {
-  background: rgba(11,18,32,0.75) !important;
-  color: #64748B; font-size: 10px; border-radius: 6px 0 0 0;
+/* ticker marquee */
+@keyframes bhu-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
-.maplibregl-ctrl-attrib a { color: #94A3B8; }
-.maplibregl-ctrl-scale {
-  background: rgba(11,18,32,0.7); border-color: #334155; color: #94A3B8;
+.bhu .ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: bhu-marquee 55s linear infinite;
 }
-.maplibregl-ctrl-group { background: #111A2C !important; }
-.maplibregl-ctrl-group button span { filter: invert(0.85); }
-.maplibregl-popup-content {
-  background: #111A2C; color: #E2E8F0;
-  border: 1px solid #1E293B; border-radius: 10px;
-}
-.maplibregl-popup-tip { border-top-color: #111A2C !important; }
+.bhu .ticker-track:hover { animation-play-state: paused; }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
+/* soft pulsing for L4 hexes (paint-level, kept cheap) */
+@keyframes bhu-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+.bhu .glow-pulse { animation: bhu-glow 2.2s ease-in-out infinite; }
+
+/* M3-styled scrollbars for ops lists */
+.bhu .bhu-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.bhu .bhu-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--on-surface-variant) 40%, transparent);
+  border-radius: 999px;
+}
+.bhu .bhu-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* M3 snackbar pulse for the demo-mode chip */
+@keyframes m3-soft-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+.m3-soft-pulse { animation: m3-soft-pulse 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bhu .ticker-track, .bhu .glow-pulse, .m3-soft-pulse { animation: none !important; opacity: 1 !important; }
+  .m3-press, .m3-motion { transition: none !important; }
+}
