@@ -304,21 +304,44 @@ function hexRing(center: [number, number], radiusDeg: number): number[][][] {
   return [pts];
 }
 
+// Flat-top hex grid (matches hexRing's vertex layout) with the /0.9 latitude
+// stretch compensated + a small safety margin — zone hexes TILE instead of
+// overlapping. Column spacing 1.56R, row spacing 2.0R, odd columns shifted
+// by R vertically (the correct offset for flat-top hexes).
+function hexGrid(n: number, discDeg: number): { centers: [number, number][]; R: number } {
+  const cols = Math.max(1, Math.ceil(Math.sqrt(1.28 * n)));
+  const rows = Math.ceil(n / cols);
+  const R = Math.min(
+    0.03,
+    (2.1 * discDeg) / ((cols - 1) * 1.56 + 2),
+    (2.1 * discDeg) / ((rows - 1) * 2.0 + 2),
+  );
+  const centers: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    centers.push([
+      (c - (cols - 1) / 2) * 1.56 * R,
+      (r - (rows - 1) / 2) * 2.0 * R + (c % 2 === 1 ? R : 0),
+    ]);
+  }
+  return { centers, R };
+}
+
 function buildZones(rng: () => number): Zone[] {
   const zones: Zone[] = [];
   for (const d of DISTRICTS) {
+    const grid = hexGrid(d.nHexes, d.radiusDeg);
     for (let i = 0; i < d.nHexes; i++) {
-      const ang = rng() * Math.PI * 2;
-      const rr = d.radiusDeg * (0.35 + 0.6 * rng());
       const center: [number, number] = [
-        +(d.center[0] + rr * Math.cos(ang)).toFixed(4),
-        +(d.center[1] + (rr * Math.sin(ang)) / 0.9).toFixed(4),
+        +(d.center[0] + grid.centers[i][0]).toFixed(4),
+        +(d.center[1] + grid.centers[i][1]).toFixed(4),
       ];
       const susc = Math.max(
         12,
         Math.min(96, d.suscBase + (rng() - 0.5) * 2 * d.suscSpread),
       );
-      const hexR = 0.028 + rng() * 0.006;
+      const hexR = grid.R;
       const elevated =
         (d.district === "East Khasi Hills" && i < 3) ||
         (d.district === "Noney" && i < 2);

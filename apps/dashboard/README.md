@@ -2,14 +2,22 @@
 
 The primary web frontend for **SIH 26001 — AI-Based Early Warning & Landslide Risk Monitoring System (NER)**, rebuilt on **Next.js 16 + Material Design 3 (Material You)** with a full tonal color system, Roboto type scale, elevation + state layers, light/dark schemes, and 60 fps MapLibre 3D hex mapping.
 
-## Two run modes — one codebase
+## Two run modes — one codebase (backend-first)
 
 | Mode | How | What you get |
 |------|-----|--------------|
-| **DEMO (default)** | `npm install && npm run dev` | The complete platform with an **in-memory API** (30 route handlers under `src/app/api/v1/*` that port the FastAPI contract). Zero infrastructure — perfect for judges, demos, and offline venues. |
-| **LIVE** | `NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev` | Every call routes to the real **FastAPI + PostGIS/Postgres** backend (auth via real JWT, 536 zones, live sensors). The map consumes the new `/api/v1/geo/*` GeoJSON endpoints; chat attaches the `/ws/live` WebSocket with polling fallback. |
+| **LIVE (auto-detected)** | start the FastAPI (`uvicorn app.main:app` on `:8000`) and run the dashboard | The dashboard **probes `localhost:8000` at boot** and routes every call to the real **FastAPI + PostGIS/Postgres** backend (auth via real JWT, 536 zones, live sensors). The map consumes the `/api/v1/geo/*` GeoJSON endpoints (zones, roads, reports, **ops** = detours/blockages/machinery, **radar** = rain cells), shelters from `/api/v1/evacuation/shelters`, and the A* hazard-avoiding evacuation safe-route from `/api/v1/evacuation/safe-route`. |
+| **LIVE (explicit)** | `NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev` | Same, pinned via env (also required for non-localhost backends). |
+| **DEMO (fallback)** | `npm run dev` with no backend running | The complete platform with an **in-memory API** (route handlers under `src/app/api/v1/*` that port the FastAPI contract). Zero infrastructure — perfect for judges, demos, and offline venues. |
 
-The active mode is shown as a **DEMO / LIVE API** chip in the top app bar.
+The active mode is shown as a **DEMO / LIVE API** chip in the top app bar (and on the login screen) — it flips to LIVE the moment the boot probe finds a backend.
+
+The map layers (all backend-fed, nothing hardcoded in the page):
+- **3D terrain** — raster-dem hillshade relief (free AWS terrarium tiles, offline-graceful) + slow auto-rotate that stops on first interaction.
+- **Hex risk zones** — click opens the zone dossier **and draws the evacuation safe-route** (amber dashed line to the safest reachable shelter, A* around L3/L4 hazard fields).
+- **Detours & blockages** — cyan dashed corridor bypasses (NH-29 / NH-102 / NH-6) with delay labels, red blockage choke points with clearance ETAs, amber machinery staging bases. In demo mode extra A* detours appear live when road segments block.
+- **Rainfall radar** — cells sized by intensity from live gauges (live: `rain_1h` per zone; demo: gauge simulation), with a sweep scrubber; click a cell for name + mm/h.
+- **Shelters** (green, from the evacuation API) and **citizen reports** (verification status colors).
 
 ## Quickstart (demo)
 

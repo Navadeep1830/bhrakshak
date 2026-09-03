@@ -211,7 +211,7 @@ export function dossier(store: Store, z: Zone, opts: { authed?: boolean } = {}):
 
 export function briefingMd(store: Store, z: Zone): string {
   const drv = drivers(z)
-    .map((d, i) => `${i + 1}. **${d.name}** (${d.feature}) — ${d.value} · contribution ${(d.contribution * 100).toFixed(0)}%`)
+    .map((d, i) => `${i + 1}. **${d.name}** (${d.feature}) — ${d.value} · contribution ${(((d.contribution ?? 0)) * 100).toFixed(0)}%`)
     .join("\n");
   const blocked = store.roads.filter(
     (r) => (r.from_zone === z.id || r.to_zone === z.id) && roadStatus(store, r) === "blocked",

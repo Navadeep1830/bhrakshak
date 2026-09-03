@@ -41,7 +41,7 @@ export default function OperationsView() {
   const [fireLang, setFireLang] = useState("hi");
   const [preview, setPreview] = useState<string | null>(null);
 
-  const ack = async (id: number) => {
+  const ack = async (id: number | string) => {
     try {
       await api.ackAlert(id, token);
       refreshAlerts();

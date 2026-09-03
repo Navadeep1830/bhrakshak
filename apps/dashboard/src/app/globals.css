@@ -276,18 +276,6 @@
 .bhu .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--surface-container-low) !important; }
 .bhu .maplibregl-canvas:focus { outline: none; }
 
-/* ticker marquee */
-@keyframes bhu-marquee {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-.bhu .ticker-track {
-  display: inline-flex;
-  white-space: nowrap;
-  animation: bhu-marquee 55s linear infinite;
-}
-.bhu .ticker-track:hover { animation-play-state: paused; }
-
 /* soft pulsing for L4 hexes (paint-level, kept cheap) */
 @keyframes bhu-glow {
   0%, 100% { opacity: 0.55; }
@@ -311,6 +299,6 @@
 .m3-soft-pulse { animation: m3-soft-pulse 2.4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .bhu .ticker-track, .bhu .glow-pulse, .m3-soft-pulse { animation: none !important; opacity: 1 !important; }
+  .bhu .glow-pulse, .m3-soft-pulse { animation: none !important; opacity: 1 !important; }
   .m3-press, .m3-motion { transition: none !important; }
 }

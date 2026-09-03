@@ -32,6 +32,22 @@ export default function Legend({ demoMode }: { demoMode?: boolean }) {
           <span className="h-0.5 w-6 bg-risk-4" />
           blocked road
         </div>
+        <div className="flex items-center gap-2.5 text-label-sm text-on-surface-variant">
+          <span className="h-0.5 w-6" style={{ background: "repeating-linear-gradient(90deg,#38BDF8 0 5px,transparent 5px 8px)" }} />
+          detour / alternative path
+        </div>
+        <div className="flex items-center gap-2.5 text-label-sm text-on-surface-variant">
+          <span className="h-0.5 w-6" style={{ background: "repeating-linear-gradient(90deg,#FBBF24 0 3px,transparent 3px 5px)" }} />
+          evacuation safe-route
+        </div>
+        <div className="flex items-center gap-2.5 text-label-sm text-on-surface-variant">
+          <span className="h-2.5 w-2.5 rounded-full bg-[#10B981]" />
+          shelter
+        </div>
+        <div className="flex items-center gap-2.5 text-label-sm text-on-surface-variant">
+          <span className="h-2.5 w-2.5 rounded-full bg-[#F59E0B]" />
+          machinery staging
+        </div>
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 "use client";
 // BhuRakshak root — login gate + view router (single-page app).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ShieldCheck, Loader2, LogIn, Mountain, Radar, Activity, Smartphone } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
-import { api } from "@/lib/client/api";
+import { api, endpoints, initApiMode, useApiMode } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +29,10 @@ function Login({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const { toast } = useToast();
   const setAuth = useAppStore((s) => s.setAuth);
+  // probe the dev box for a real FastAPI (localhost:8000) before the first
+  // login — when one is running, LIVE is the default, not the exception
+  const apiMode = useApiMode();
+  useEffect(() => { void initApiMode(); }, []);
 
   const signIn = async (e?: string, p?: string) => {
     setBusy(true);
@@ -43,7 +47,16 @@ function Login({ onDone }: { onDone: () => void }) {
       });
       onDone();
     } catch (err) {
-      toast({ title: "Login failed", description: String(err), variant: "destructive" });
+      // Translate browser network failures (dead tunnel / backend down /
+      // CORS) into an actionable message instead of "TypeError: Failed to
+      // fetch", which tells the user nothing.
+      const raw = String(err);
+      const desc = /failed to fetch|load failed|networkerror/i.test(raw)
+        ? endpoints.API
+          ? `API unreachable at ${endpoints.API} — is the backend or tunnel up?`
+          : `Network error — the in-browser demo routes should always respond (${raw})`
+        : raw;
+      toast({ title: "Login failed", description: desc, variant: "destructive" });
     } finally {
       setBusy(false);
     }
@@ -92,6 +105,11 @@ function Login({ onDone }: { onDone: () => void }) {
         <div className="rounded-xl border border-outline-variant/60 bg-surface-low p-8 flex flex-col elevation-2">
           <h1 className="text-title-lg font-medium">Sign in to Command Center</h1>
           <p className="text-body-sm text-on-surface-variant mt-1">Demo instance — pick a role or type credentials.</p>
+          <p className="text-label-sm text-on-surface-variant/70 mt-0.5">
+            {apiMode
+              ? `LIVE mode — real FastAPI backend at ${apiMode}`
+              : "DEMO mode — no backend detected; in-browser data"}
+          </p>
 
           <div className="mt-6 space-y-2">
             {QUICK_USERS.map((u) => (

@@ -12,18 +12,21 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/client/api";
+import { api, useApiMode } from "@/lib/client/api";
 import { usePoll } from "@/hooks/use-poll";
 import { useToast } from "@/hooks/use-toast";
 
 const DISTRICTS = ["East Khasi Hills", "Noney", "Aizawl", "Imphal West", "Kohima", "Gangtok"];
-const LIVE_MODE = process.env.NEXT_PUBLIC_API_URL ? true : false;
 
 export default function TopNav() {
   const { view, setView, role, fullName, logout, districtFilter, setDistrictFilter, theme, setTheme } = useAppStore();
   const { toast } = useToast();
   const { data: kpis } = usePoll(api.kpis, 6000);
   const isCitizen = role === "citizen";
+  // Truthful mode: live iff calls actually leave the browser for a real API
+  // (env override, tunnel pairing, or the boot probe of localhost:8000).
+  const apiMode = useApiMode();
+  const LIVE_MODE = !!apiMode;
 
   // M3 light/dark scheme toggle (persisted).
   useEffect(() => {
@@ -115,7 +118,7 @@ export default function TopNav() {
               ? { background: "var(--tertiary-container)", color: "var(--on-tertiary-container)" }
               : { background: "var(--secondary-container)", color: "var(--on-secondary-container)" }
           }
-          title={LIVE_MODE ? "Connected to the live FastAPI backend" : "Standalone demo instance (in-memory API)"}
+          title={LIVE_MODE ? `Live FastAPI backend — ${apiMode}` : "Standalone demo instance (in-memory API)"}
         >
           {LIVE_MODE ? <Satellite className="h-3.5 w-3.5" /> : <FlaskConical className="h-3.5 w-3.5" />}
           {LIVE_MODE ? "LIVE API" : "DEMO"}
