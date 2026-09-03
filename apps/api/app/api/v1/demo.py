@@ -110,6 +110,33 @@ async def inject_rainfall_storm(
         }
 
 
+@router.post("/reset-storm")
+async def reset_storm(db: AsyncSession = Depends(get_db), _user=Depends(require_roles(*ADMIN_ONLY))):
+    """Undo the demo storm: delete observations from the last 24 h and relax
+    every zone through the hysteresis ladder (escalate ×2 needs 2 ticks, so
+    de-escalation gets its symmetric 4 ticks here) back to the calm posture.
+    The next rainfall-poll tick refills the live gauge history."""
+    try:
+        if db is None:
+            raise ValueError("PostgreSQL offline in demo mode")
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        res = await db.execute(
+            RainfallObs.__table__.delete().where(RainfallObs.ts >= cutoff)
+        )
+        await db.commit()
+        result = {"evaluated": 0}
+        for _ in range(4):
+            result = await evaluate_all_zones(db)
+        return {
+            "demo_mode": False,
+            "deleted_obs": res.rowcount or 0,
+            "evaluated": result.get("evaluated", 0),
+            "note": "storm cleared - hysteresis ladder relaxed, live gauge resumes next tick",
+        }
+    except Exception as e:
+        return {"demo_mode": True, "status": "reset_failed", "detail": str(e)[:200]}
+
+
 @router.get("/replay-event")
 async def replay_event(event: str = "noney_2022", _user=Depends(require_roles(*ADMIN_ONLY))):
     """Serve the cached backtest fixture timeline through the same API shape."""

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAppStore } from "@/store/useAppStore";
+
+import { useAppStore, type Horizon } from "@/store/useAppStore";
+import { cn } from "@/lib/utils";
 
 export const GPM_RADAR_TIMESTEPS = [
   { label: "-6h", desc: "T - 6h IMERG Satellite", intensity_mult: 0.35, source: "GPM IMERG" },
@@ -18,11 +20,20 @@ export const GPM_RADAR_TIMESTEPS = [
   { label: "+6h", desc: "T + 6h Convective Dissipation", intensity_mult: 0.78, source: "Model B Nowcast" },
 ];
 
+const HORIZONS: { key: Horizon; label: string }[] = [
+  { key: "now", label: "NOW" },
+  { key: "f24", label: "F24" },
+  { key: "f48", label: "F48" },
+  { key: "f72", label: "F72" },
+];
+
 export function RadarSlider() {
   const radarStep = useAppStore((s) => s.radarStep);
   const setRadarStep = useAppStore((s) => s.setRadarStep);
   const radarPlaying = useAppStore((s) => s.radarPlaying);
   const toggleRadarPlaying = useAppStore((s) => s.toggleRadarPlaying);
+  const horizon = useAppStore((s) => s.horizon);
+  const setHorizon = useAppStore((s) => s.setHorizon);
   const isRainfallOn = useAppStore((s) => s.layers.rainfall ?? true);
   const [speed, setSpeed] = useState<1 | 2>(1);
   const [radarSource, setRadarSource] = useState<"IMD" | "GPM">("IMD");
@@ -45,7 +56,7 @@ export function RadarSlider() {
   return (
     <div
       className="anim anim-fade absolute bottom-20 left-1/2 z-10 -translate-x-1/2 flex flex-col items-center rounded-2xl border border-sky-500/30 bg-panel/95 px-4 py-2.5 shadow-2xl shadow-black/70 backdrop-blur-md"
-      style={{ width: "min(94vw, 600px)", animationDelay: "0.8s" }}
+      style={{ width: "min(94vw, 640px)", animationDelay: "0.8s" }}
     >
       <div className="flex w-full items-center justify-between">
         <div className="flex items-center gap-2">
@@ -98,28 +109,21 @@ export function RadarSlider() {
           </div>
         </div>
 
-        {/* Source Toggle & Rain Intensity Ramp */}
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-md bg-bg/80 p-0.5 text-[9px] font-semibold text-slate-300">
+        {/* Horizon switcher (preview parity): paints the hazard surface with
+            the selected forecast horizon instead of 'now' */}
+        <div className="flex overflow-hidden rounded-lg border border-edge">
+          {HORIZONS.map((h) => (
             <button
-              onClick={() => setRadarSource("IMD")}
-              className={`rounded px-1.5 py-0.5 ${radarSource === "IMD" ? "bg-sky-600 text-white font-bold" : "text-muted"}`}
+              key={h.key}
+              onClick={() => { setHorizon(h.key); if (h.key !== "now") setRadarStep(6); }}
+              className={cn(
+                "px-2.5 py-1 text-[11px] font-bold transition-colors",
+                horizon === h.key ? "bg-orange-600 text-white" : "bg-bg/60 text-muted hover:text-ink"
+              )}
             >
-              IMD
+              {h.label}
             </button>
-            <button
-              onClick={() => setRadarSource("GPM")}
-              className={`rounded px-1.5 py-0.5 ${radarSource === "GPM" ? "bg-sky-600 text-white font-bold" : "text-muted"}`}
-            >
-              GPM
-            </button>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-1 text-[9px] text-slate-300 font-mono">
-            <span>0</span>
-            <div className="h-2 w-16 rounded-full bg-gradient-to-r from-emerald-500 via-yellow-400 via-orange-500 to-rose-600 shadow-inner" />
-            <span>75+ mm/h</span>
-          </div>
+          ))}
         </div>
       </div>
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { LEVEL_COLORS } from "@/lib/utils";
+import { useAppStore } from "@/store/useAppStore";
 import type { TickerEvent } from "@/lib/types";
 
 function getWsUrl(): string {
@@ -17,6 +18,7 @@ function getWsUrl(): string {
 
 export function Ticker() {
   const [events, setEvents] = useState<TickerEvent[]>([]);
+  const demoMode = useAppStore((s) => s.demoMode);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -58,6 +60,11 @@ export function Ticker() {
       <span className="flex shrink-0 items-center gap-1.5 font-bold uppercase tracking-widest text-orange-400">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-orange-400" />
         Live feed
+        {demoMode && (
+          <span className="ml-1 rounded bg-orange-900/80 px-1.5 py-0.5 text-[9px] tracking-normal text-orange-300">
+            DEMO MODE
+          </span>
+        )}
       </span>
       <div className="flex flex-1 gap-6 overflow-hidden whitespace-nowrap">
         {events.length === 0 && (
