@@ -7,6 +7,7 @@
 // public api localtunnel (phone-to-PC demo workflow).
 import type {
   Dossier, KpisOut, AlertRow, PriorityRow, RegistryRow, LoginResponse,
+  MeResponse, AuthSession, LoginUser,
   TickerEvent, WeatherOut, ReportOut,
 } from "@/lib/types";
 
@@ -36,12 +37,31 @@ const B = endpoints.API;
 const tunnelHeaders: Record<string, string> = B ? { "Bypass-Tunnel-Remainder": "true" } : {};
 
 export const api = {
-  login: (email: string, password: string) =>
-    fetch(`${B}/api/v1/auth/login`, {
+  login: async (email: string, password: string): Promise<AuthSession> => {
+    const out = await fetch(`${B}/api/v1/auth/login`, {
       method: "POST",
       headers: { ...tunnelHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
-    }).then(j<LoginResponse>),
+    }).then(j<LoginResponse>);
+    // Demo route embeds the profile; the live FastAPI TokenOut returns only
+    // tokens — hydrate the profile from /auth/me, with a typed-email fallback
+    // so a missing profile can never crash the login screen.
+    let user: LoginUser | undefined = out.user;
+    if (!user) {
+      user = await fetch(`${B}/api/v1/auth/me`, {
+        headers: { ...tunnelHeaders, ...authHeaders(out.access_token) },
+      })
+        .then(j<MeResponse>)
+        .catch(() => undefined);
+    }
+    return {
+      token: out.access_token,
+      role: user?.role ?? out.role,
+      email: user?.email ?? email,
+      fullName: user?.full_name ?? null,
+      district: user?.district ?? null,
+    };
+  },
 
   kpis: () => fetch(`${B}/api/v1/analytics/kpis`, { headers: tunnelHeaders }).then(j<KpisOut>),
 

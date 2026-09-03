@@ -35,11 +35,11 @@ function Login({ onDone }: { onDone: () => void }) {
     try {
       const out = await api.login(e ?? email, p ?? password);
       setAuth({
-        token: out.access_token,
+        token: out.token,
         role: out.role,
-        email: out.user.email,
-        fullName: out.user.full_name,
-        district: out.user.district,
+        email: out.email,
+        fullName: out.fullName,
+        district: out.district,
       });
       onDone();
     } catch (err) {
