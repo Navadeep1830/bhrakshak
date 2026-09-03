@@ -34,6 +34,8 @@ async def get_current_user(
         return User(
             id=uuid.UUID(payload.get("sub", "00000000-0000-0000-0000-000000000001")),
             email="admin@bhrakshak.in",
+            full_name="Demo Administrator",
+            preferred_lang="en",
             role=role_enum,
             is_active=True,
         )
@@ -51,6 +53,8 @@ async def get_current_user(
         user = User(
             id=uuid.UUID(payload.get("sub", "00000000-0000-0000-0000-000000000001")),
             email="admin@bhrakshak.in",
+            full_name="Demo Administrator",
+            preferred_lang="en",
             role=role_enum,
             is_active=True,
         )

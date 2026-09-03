@@ -6,11 +6,16 @@ import { persist } from "zustand/middleware";
 export type View = "command" | "operations" | "analytics" | "pwa";
 
 export interface Layers {
-  susceptibility: boolean;
+  terrain: boolean;
   hazard: boolean;
+  susceptibility: boolean;
   radar: boolean;
   creep: boolean;
   population: boolean;
+  roads: boolean;
+  detours: boolean;
+  shelters: boolean;
+  reports: boolean;
 }
 
 interface AppState {
@@ -26,6 +31,10 @@ interface AppState {
   horizon: 0 | 24 | 48 | 72;
   radarStep: number;
   layers: Layers;
+  /** Safe-route for the selected zone (computed by MapView, read by the
+   *  DossierDrawer) — normalized contract, null when none. */
+  evacRoute: { zoneId: string; data: any } | null;
+  setEvacRoute: (r: { zoneId: string; data: any } | null) => void;
   setAuth: (a: Partial<Pick<AppState, "token" | "role" | "email" | "fullName" | "district">>) => void;
   logout: () => void;
   setView: (v: View) => void;
@@ -51,18 +60,25 @@ export const useAppStore = create<AppState>()(
       districtFilter: null,
       horizon: 0,
       radarStep: 6,
+      evacRoute: null,
       layers: {
-        susceptibility: false,
+        terrain: true,
         hazard: true,
+        susceptibility: false,
         radar: true,
         creep: true,
         population: false,
+        roads: true,
+        detours: true,
+        shelters: true,
+        reports: true,
       },
       setAuth: (a) => set(a),
       logout: () => set({ token: null, role: null, email: null, fullName: null, district: null, view: "command", selectedZoneId: null }),
       setView: (v) => set({ view: v, selectedZoneId: null }),
       setTheme: (t) => set({ theme: t }),
       selectZone: (id) => set({ selectedZoneId: id }),
+      setEvacRoute: (r) => set({ evacRoute: r }),
       setDistrictFilter: (d) => set({ districtFilter: d }),
       setHorizon: (h) => set({ horizon: h }),
       setRadarStep: (s) => set({ radarStep: s }),

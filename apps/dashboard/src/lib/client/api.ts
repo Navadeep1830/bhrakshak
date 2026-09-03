@@ -1,19 +1,21 @@
 // Client-side API helpers.
-// DEMO MODE (default): all calls go to the in-memory Next.js route handlers
-// mounted at /api/v1/* — the dashboard runs fully standalone. Any https
-// origin that is NOT a *.loca.lt tunnel also runs demo (preview hosts,
-// static deploys) — never depend on a backend that may not be running.
-// LIVE MODE: (a) NEXT_PUBLIC_API_URL set explicitly (e.g.
-// http://localhost:8000), or (b) the dashboard itself is served from a
-// *.loca.lt localtunnel (phone-to-PC demo workflow) -> auto-pair with the
-// API tunnel https://bhrakshak-api-demo.loca.lt.
+// API base resolution order (backend-first):
+//   1. NEXT_PUBLIC_API_URL set explicitly (e.g. http://localhost:8000)
+//   2. dashboard served from a *.loca.lt tunnel -> auto-pair with the API
+//      tunnel https://bhrakshak-api-demo.loca.lt
+//   3. probed at boot: a local FastAPI on localhost:8000 -> LIVE
+//   4. "" -> in-app demo routes at /api/v1/* (in-memory, zero infra)
+// The probe (initApiMode) runs once from the root page before login, so
+// the FIRST real request already targets the real backend when one is
+// running — demo is a fallback, not the default.
+import { useSyncExternalStore } from "react";
 import type {
   Dossier, KpisOut, AlertRow, PriorityRow, RegistryRow, LoginResponse,
   MeResponse, AuthSession, LoginUser,
   TickerEvent, WeatherOut, ReportOut,
 } from "@/lib/types";
 
-function getApiUrl(): string {
+function initialApiUrl(): string {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
   if (typeof window !== "undefined" && window.location.protocol === "https:") {
     // Auto-live ONLY when the dashboard itself is tunnelled (*.loca.lt) —
@@ -26,7 +28,47 @@ function getApiUrl(): string {
   return "";
 }
 
-export const endpoints = { API: getApiUrl() };
+export const endpoints = { API: initialApiUrl() };
+
+// ---- reactive mode (login screen + TopNav chip follow probe results) ----
+type ModeListener = () => void;
+const listeners = new Set<ModeListener>();
+function subscribeMode(fn: ModeListener) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+/** Current API base as reactive state (re-renders when the probe resolves). */
+export function useApiMode(): string {
+  // server snapshot: "" (demo) — mode is resolved client-side by the probe
+  return useSyncExternalStore(subscribeMode, () => endpoints.API, () => "");
+}
+
+const LOCAL_BACKENDS = ["http://localhost:8000", "http://127.0.0.1:8000"];
+let modePromise: Promise<void> | null = null;
+
+/** Probe for a real FastAPI on the dev box. Idempotent; runs once. */
+export function initApiMode(): Promise<void> {
+  if (modePromise) return modePromise;
+  modePromise = (async () => {
+    if (endpoints.API) return; // env override / tunnel pairing — trust it
+    for (const base of LOCAL_BACKENDS) {
+      try {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 1500);
+        const r = await fetch(`${base}/health`, { signal: ctl.signal });
+        clearTimeout(timer);
+        if (r.ok) {
+          endpoints.API = base;
+          listeners.forEach((fn) => fn());
+          return;
+        }
+      } catch {
+        /* backend not up here — try the next candidate */
+      }
+    }
+  })();
+  return modePromise;
+}
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -136,15 +178,15 @@ function normDossier(raw: Record<string, any>): Dossier {
   };
 }
 
-const B = endpoints.API;
+const apiBase = () => endpoints.API;
 // localtunnel interstitial bypass (no-op against a direct backend)
-const tunnelHeaders: Record<string, string> = B ? { "Bypass-Tunnel-Remainder": "true" } : {};
+const liveHeaders = (): Record<string, string> => apiBase() ? { "Bypass-Tunnel-Remainder": "true" } : {};
 
 export const api = {
   login: async (email: string, password: string): Promise<AuthSession> => {
-    const out = await fetch(`${B}/api/v1/auth/login`, {
+    const out = await fetch(`${apiBase()}/api/v1/auth/login`, {
       method: "POST",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json" },
+      headers: { ...liveHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     }).then(j<LoginResponse>);
     // Demo route embeds the profile; the live FastAPI TokenOut returns only
@@ -152,8 +194,8 @@ export const api = {
     // so a missing profile can never crash the login screen.
     let user: LoginUser | undefined = out.user;
     if (!user) {
-      user = await fetch(`${B}/api/v1/auth/me`, {
-        headers: { ...tunnelHeaders, ...authHeaders(out.access_token) },
+      user = await fetch(`${apiBase()}/api/v1/auth/me`, {
+        headers: { ...liveHeaders(), ...authHeaders(out.access_token) },
       })
         .then(j<MeResponse>)
         .catch(() => undefined);
@@ -167,124 +209,134 @@ export const api = {
     };
   },
 
-  kpis: () => fetch(`${B}/api/v1/analytics/kpis`, { headers: tunnelHeaders }).then(j<KpisOut>),
+  kpis: () => fetch(`${apiBase()}/api/v1/analytics/kpis`, { headers: liveHeaders() }).then(j<KpisOut>),
 
   zonesGeo: (district?: string | null, horizon = 0) => {
     const p = new URLSearchParams();
     if (district) p.set("district", district);
     if (horizon) p.set("horizon", String(horizon));
     const qs = p.toString();
-    return fetch(`${B}/api/v1/geo/zones${qs ? `?${qs}` : ""}`).then(j<any>);
+    return fetch(`${apiBase()}/api/v1/geo/zones${qs ? `?${qs}` : ""}`).then(j<any>);
   },
-  roadsGeo: () => fetch(`${B}/api/v1/geo/roads`, { headers: tunnelHeaders }).then(j<any>),
-  reportsGeo: () => fetch(`${B}/api/v1/geo/reports`, { headers: tunnelHeaders }).then(j<any>),
+  roadsGeo: () => fetch(`${apiBase()}/api/v1/geo/roads`, { headers: liveHeaders() }).then(j<any>),
+  reportsGeo: () => fetch(`${apiBase()}/api/v1/geo/reports`, { headers: liveHeaders() }).then(j<any>),
+  /** Ops overlay: active detours, blockage points, machinery staging. */
+  opsGeo: () => fetch(`${apiBase()}/api/v1/geo/ops`, { headers: liveHeaders() }).then(j<any>),
+  /** Rainfall radar cells (live Timescale rain_1h, demo storm fallback). */
+  radarGeo: () => fetch(`${apiBase()}/api/v1/geo/radar`, { headers: liveHeaders() }).then(j<any>),
 
   dossier: (zoneId: string, token: string | null) =>
-    fetch(`${B}/api/v1/zones/${zoneId}/dossier`, { headers: { ...tunnelHeaders, ...authHeaders(token) } })
+    fetch(`${apiBase()}/api/v1/zones/${zoneId}/dossier`, { headers: { ...liveHeaders(), ...authHeaders(token) } })
       .then(j<Record<string, any>>)
       .then(normDossier),
 
   briefing: (zoneId: string, token: string | null) =>
-    fetch(`${B}/api/v1/analytics/briefing-dossier/${zoneId}`, { headers: { ...tunnelHeaders, ...authHeaders(token) } })
+    fetch(`${apiBase()}/api/v1/analytics/briefing-dossier/${zoneId}`, { headers: { ...liveHeaders(), ...authHeaders(token) } })
       .then(j<{ zone_code: string; briefing_md: string }>),
 
   weather: (zoneId: string) =>
-    fetch(`${B}/api/v1/zones/${zoneId}/weather`, { headers: tunnelHeaders }).then(j<WeatherOut>),
+    fetch(`${apiBase()}/api/v1/zones/${zoneId}/weather`, { headers: liveHeaders() }).then(j<WeatherOut>),
 
   alerts: (token: string | null) =>
-    fetch(`${B}/api/v1/alerts`, { headers: { ...tunnelHeaders, ...authHeaders(token) } })
+    fetch(`${apiBase()}/api/v1/alerts`, { headers: { ...liveHeaders(), ...authHeaders(token) } })
       .then(j<Record<string, any>[]>)
       .then((rows) => rows.map(normAlert)),
 
   ackAlert: (id: number | string, token: string | null) =>
-    fetch(`${B}/api/v1/alerts/${id}/ack`, { method: "POST", headers: authHeaders(token) })
+    fetch(`${apiBase()}/api/v1/alerts/${id}/ack`, { method: "POST", headers: authHeaders(token) })
       .then(j<{ acked: number }>),
 
   previewFire: (zoneId: string, language: string) =>
-    fetch(`${B}/api/v1/alerts/preview-fire`, {
+    fetch(`${apiBase()}/api/v1/alerts/preview-fire`, {
       method: "POST",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json" },
+      headers: { ...liveHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ zone_id: zoneId, language }),
     }).then(j<{ zone_code: string; level: number; lang: string; message: string; channels: string[] }>),
 
   priority: (token: string | null) =>
-    fetch(`${B}/api/v1/analytics/priority`, { headers: { ...tunnelHeaders, ...authHeaders(token) } })
+    fetch(`${apiBase()}/api/v1/analytics/priority`, { headers: { ...liveHeaders(), ...authHeaders(token) } })
       .then(j<Record<string, any>[]>)
       .then((rows) => rows.map(normPriority)),
 
   applySop: (zoneId: string, sopId: string, token: string | null) =>
-    fetch(`${B}/api/v1/analytics/priority`, {
+    fetch(`${apiBase()}/api/v1/analytics/priority`, {
       method: "POST",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json", ...authHeaders(token) },
+      headers: { ...liveHeaders(), "Content-Type": "application/json", ...authHeaders(token) },
       body: JSON.stringify({ zone_id: zoneId, sop_id: sopId }),
     }).then(j<{ status?: string; zone_code?: string }>),
 
   assignTeam: (zoneId: string, team: string, token: string | null) =>
-    fetch(`${B}/api/v1/analytics/priority`, {
+    fetch(`${apiBase()}/api/v1/analytics/priority`, {
       method: "PUT",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json", ...authHeaders(token) },
+      headers: { ...liveHeaders(), "Content-Type": "application/json", ...authHeaders(token) },
       body: JSON.stringify({ zone_id: zoneId, team }),
     }).then(j<any>),
 
-  registry: () => fetch(`${B}/api/v1/analytics/registry`, { headers: tunnelHeaders }).then(j<RegistryRow[]>),
-  backtest: () => fetch(`${B}/api/v1/analytics/backtest`, { headers: tunnelHeaders }).then(j<any>),
+  registry: () => fetch(`${apiBase()}/api/v1/analytics/registry`, { headers: liveHeaders() }).then(j<RegistryRow[]>),
+  backtest: () => fetch(`${apiBase()}/api/v1/analytics/backtest`, { headers: liveHeaders() }).then(j<any>),
 
   events: (since = 0) =>
-    fetch(`${B}/api/v1/events?since=${since}`, { headers: tunnelHeaders }).then(j<{ events: TickerEvent[]; latest_id: number }>),
+    fetch(`${apiBase()}/api/v1/events?since=${since}`, { headers: liveHeaders() }).then(j<{ events: TickerEvent[]; latest_id: number }>),
 
-  shelters: () => fetch(`${B}/api/v1/evacuation/shelters`, { headers: tunnelHeaders }).then(j<any[]>),
-  safeRoute: (zoneCode: string) =>
-    fetch(`${B}/api/v1/evacuation/safe-route?zone=${encodeURIComponent(zoneCode)}`, { headers: tunnelHeaders }).then(j<any>),
+  shelters: () => fetch(`${apiBase()}/api/v1/evacuation/shelters`, { headers: liveHeaders() }).then(j<any[]>),
+  /** Hazard-avoiding evacuation route from a zone centre to the safest
+   *  shelter (live FastAPI contract: lat/lon query params; the demo route
+   *  accepts the same params for parity). */
+  safeRoute: (lat: number, lon: number, population?: number) => {
+    const p = new URLSearchParams({ lat: String(lat), lon: String(lon) });
+    if (population != null) p.set("population", String(population));
+    return fetch(`${apiBase()}/api/v1/evacuation/safe-route?${p}`, { headers: liveHeaders() }).then(j<any>);
+  },
 
-  roadsStatus: () => fetch(`${B}/api/v1/roads/status`, { headers: tunnelHeaders }).then(j<any>),
+  roadsStatus: () => fetch(`${apiBase()}/api/v1/roads/status`, { headers: liveHeaders() }).then(j<any>),
   detour: (from: string, to: string) =>
-    fetch(`${B}/api/v1/roads/detour`, {
+    fetch(`${apiBase()}/api/v1/roads/detour`, {
       method: "POST",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json" },
+      headers: { ...liveHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ from, to }),
     }).then(j<any>),
   clearance: (roadId: string) =>
-    fetch(`${B}/api/v1/roads/clearance-estimate`, {
+    fetch(`${apiBase()}/api/v1/roads/clearance-estimate`, {
       method: "POST",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json" },
+      headers: { ...liveHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ road_id: roadId }),
     }).then(j<any>),
 
   reports: (token: string | null) =>
-    fetch(`${B}/api/v1/reports`, { headers: { ...tunnelHeaders, ...authHeaders(token) } }).then(j<ReportOut[]>),
+    fetch(`${apiBase()}/api/v1/reports`, { headers: { ...liveHeaders(), ...authHeaders(token) } }).then(j<ReportOut[]>),
   createReport: (r: any) =>
-    fetch(`${B}/api/v1/reports`, {
+    fetch(`${apiBase()}/api/v1/reports`, {
       method: "POST",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json" },
+      headers: { ...liveHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(r),
     }).then(j<{ id: number; zone_code: string; status: string }>),
   syncReports: (queued: any[]) =>
-    fetch(`${B}/api/v1/reports/sync`, {
+    fetch(`${apiBase()}/api/v1/reports/sync`, {
       method: "POST",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json" },
+      headers: { ...liveHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ queued }),
     }).then(j<{ results: any[]; synced: number }>),
   verifyReport: (id: number, token: string | null, reject = false) =>
-    fetch(`${B}/api/v1/reports/${id}/verify`, {
+    fetch(`${apiBase()}/api/v1/reports/${id}/verify`, {
       method: "POST",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json", ...authHeaders(token) },
+      headers: { ...liveHeaders(), "Content-Type": "application/json", ...authHeaders(token) },
       body: JSON.stringify({ reject }),
     }).then(j<{ id: number; status: string }>),
 
   injectStorm: (token: string | null) =>
-    fetch(`${B}/api/v1/demo/inject-rainfall-storm`, { method: "POST", headers: authHeaders(token) })
+    fetch(`${apiBase()}/api/v1/demo/inject-rainfall-storm`, { method: "POST", headers: authHeaders(token) })
       .then(j<any>),
   resetStorm: (token: string | null) =>
-    fetch(`${B}/api/v1/demo/reset-storm`, { method: "POST", headers: authHeaders(token) })
+    fetch(`${apiBase()}/api/v1/demo/reset-storm`, { method: "POST", headers: authHeaders(token) })
       .then(j<any>),
 
   chatMessages: (token: string | null) =>
-    fetch(`${B}/api/v1/chat/messages`, { headers: { ...tunnelHeaders, ...authHeaders(token) } }).then(j<any[]>),
+    fetch(`${apiBase()}/api/v1/chat/messages`, { headers: { ...liveHeaders(), ...authHeaders(token) } }).then(j<any[]>),
 
   chatSend: (token: string | null, message: string) =>
-    fetch(`${B}/api/v1/chat/send`, {
+    fetch(`${apiBase()}/api/v1/chat/send`, {
       method: "POST",
-      headers: { ...tunnelHeaders, "Content-Type": "application/json", ...authHeaders(token) },
+      headers: { ...liveHeaders(), "Content-Type": "application/json", ...authHeaders(token) },
       body: JSON.stringify({ message }),
     }).then(j<{ id: string; sender_name: string; location: string; message: string; role: string; timestamp: string }>),
 };

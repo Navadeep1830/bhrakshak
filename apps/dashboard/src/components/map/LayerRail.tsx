@@ -1,15 +1,23 @@
 "use client";
 // Layer rail — map layer toggles (M3 card + filter-chip rows).
-import { Layers, Mountain, Flame, CloudRain, Activity, Users, Check } from "lucide-react";
+import {
+  Layers, Mountain, Flame, CloudRain, Activity, Users, Route, Home,
+  MapPin, Landmark, MountainSnow, Check,
+} from "lucide-react";
 import { useAppStore, type Layers as LayerState } from "@/store/useAppStore";
 import { cn } from "@/lib/utils";
 
 const LAYERS: { k: keyof LayerState; label: string; icon: any }[] = [
+  { k: "terrain", label: "3D terrain", icon: MountainSnow },
   { k: "hazard", label: "Hazard (fused)", icon: Flame },
   { k: "susceptibility", label: "Susceptibility (Model A)", icon: Mountain },
   { k: "radar", label: "Rainfall radar", icon: CloudRain },
   { k: "creep", label: "Creep (Model C)", icon: Activity },
   { k: "population", label: "Population heat", icon: Users },
+  { k: "roads", label: "Road network", icon: Route },
+  { k: "detours", label: "Detours & blockages", icon: Landmark },
+  { k: "shelters", label: "Shelters", icon: Home },
+  { k: "reports", label: "Citizen reports", icon: MapPin },
 ];
 
 export default function LayerRail() {

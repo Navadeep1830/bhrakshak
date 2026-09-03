@@ -131,29 +131,49 @@ async def safe_route(
 
 
 @router.get("/shelters")
-async def list_shelters(district: str | None = None, db: AsyncSession = Depends(get_db)):
-    q = select(
-        Shelter.id, Shelter.name, Shelter.district, Shelter.capacity,
-        Shelter.occupancy, Shelter.shelter_type, Shelter.has_medical,
-        Shelter.water_liters, Shelter.ration_packets, Shelter.slope_deg,
-        Shelter.distance_to_steep_slope_m, Shelter.active,
-        gfunc.ST_Y(Shelter.geom).label("lat"), gfunc.ST_X(Shelter.geom).label("lon"),
-    ).where(Shelter.active.is_(True))
-    if district:
-        q = q.where(Shelter.district == district)
-    rows = (await db.execute(q)).all()
+async def list_shelters(district: str | None = None, db: AsyncSession | None = Depends(get_db)):
+    """Shelter registry. DB-backed when Postgres is up; falls back to the
+    demo registry so the map's shelter layer keeps working offline."""
+    if db is not None:
+        try:
+            q = select(
+                Shelter.id, Shelter.name, Shelter.district, Shelter.capacity,
+                Shelter.occupancy, Shelter.shelter_type, Shelter.has_medical,
+                Shelter.water_liters, Shelter.ration_packets, Shelter.slope_deg,
+                Shelter.distance_to_steep_slope_m, Shelter.active,
+                gfunc.ST_Y(Shelter.geom).label("lat"), gfunc.ST_X(Shelter.geom).label("lon"),
+            ).where(Shelter.active.is_(True))
+            if district:
+                q = q.where(Shelter.district == district)
+            rows = (await db.execute(q)).all()
+            if rows:
+                return [
+                    {
+                        "id": str(r.id), "name": r.name, "district": r.district,
+                        "capacity": r.capacity, "occupancy": r.occupancy,
+                        "free_beds": max(0, r.capacity - r.occupancy),
+                        "shelter_type": r.shelter_type, "has_medical": r.has_medical,
+                        "water_liters": r.water_liters, "ration_packets": r.ration_packets,
+                        "slope_deg": r.slope_deg,
+                        "distance_to_steep_slope_m": r.distance_to_steep_slope_m,
+                        "lat": float(r.lat), "lon": float(r.lon),
+                    }
+                    for r in rows
+                ]
+        except Exception:
+            pass  # DB down — serve the demo registry
     return [
         {
-            "id": str(r.id), "name": r.name, "district": r.district,
-            "capacity": r.capacity, "occupancy": r.occupancy,
-            "free_beds": max(0, r.capacity - r.occupancy),
-            "shelter_type": r.shelter_type, "has_medical": r.has_medical,
-            "water_liters": r.water_liters, "ration_packets": r.ration_packets,
-            "slope_deg": r.slope_deg,
-            "distance_to_steep_slope_m": r.distance_to_steep_slope_m,
-            "lat": float(r.lat), "lon": float(r.lon),
+            "id": s["id"], "name": s["name"], "district": s["district"],
+            "capacity": s["capacity"], "occupancy": s["occupancy"],
+            "free_beds": max(0, s["capacity"] - s["occupancy"]),
+            "shelter_type": s["shelter_type"], "has_medical": s["has_medical"],
+            "slope_deg": s["slope_deg"],
+            "distance_to_steep_slope_m": s["distance_to_steep_slope_m"],
+            "lat": s["lat"], "lon": s["lon"],
         }
-        for r in rows
+        for s in DEMO_SHELTERS
+        if not district or s["district"] == district
     ]
 
 

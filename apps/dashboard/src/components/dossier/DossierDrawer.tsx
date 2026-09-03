@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Copy, Download, FileText, Loader2 } from "lucide-react";
+import { Copy, Download, FileText, Loader2, Route } from "lucide-react";
 import { useAppStore, LEVEL_COLORS, chartPalette } from "@/store/useAppStore";
 import { api } from "@/lib/client/api";
 import type { Dossier } from "@/lib/types";
@@ -18,7 +18,7 @@ import ReactECharts from "echarts-for-react";
 const LVL_LABELS = ["L0 Normal", "L1 Watch", "L2 Alert", "L3 Warning", "L4 Emergency"];
 
 export default function DossierDrawer() {
-  const { selectedZoneId, selectZone, token, role, theme } = useAppStore();
+  const { selectedZoneId, selectZone, token, role, theme, evacRoute } = useAppStore();
   const [d, setD] = useState<Dossier | null>(null);
   const [busy, setBusy] = useState(false);
   const [md, setMd] = useState<string | null>(null);
@@ -218,6 +218,42 @@ export default function DossierDrawer() {
               ) : (
                 <div className="text-body-sm text-on-surface-variant/60 rounded-md border border-dashed border-outline-variant p-3">
                   No gauge or weather data for this zone in the current feed.
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            {/* evacuation safe-route (hazard-avoiding, drawn on the map) */}
+            <section>
+              <h3 className="text-label-md font-semibold text-primary uppercase tracking-wider mb-2">
+                Evacuation route
+              </h3>
+              {evacRoute && evacRoute.zoneId === selectedZoneId ? (
+                <div className="rounded-md border border-outline-variant/60 bg-surface-container p-3 text-body-sm space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Route className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-medium">{evacRoute.data.shelterName}</span>
+                    <span className="ml-auto text-label-sm text-on-surface-variant/70">safest reachable shelter</span>
+                  </div>
+                  <div className="flex justify-between"><span className="text-on-surface-variant">Distance</span><span>{evacRoute.data.distance_km ?? "—"} km</span></div>
+                  <div className="flex justify-between"><span className="text-on-surface-variant">Walking ETA</span><span>≈ {evacRoute.data.eta_min ?? "—"} min</span></div>
+                  {evacRoute.data.shelter?.free != null && (
+                    <div className="flex justify-between"><span className="text-on-surface-variant">Free capacity</span><span>{evacRoute.data.shelter.free} / {evacRoute.data.shelter.capacity ?? "—"}</span></div>
+                  )}
+                  {evacRoute.data.shelter?.has_medical != null && (
+                    <div className="flex justify-between"><span className="text-on-surface-variant">Medical unit</span><span>{evacRoute.data.shelter.has_medical ? "on site" : "none"}</span></div>
+                  )}
+                  {evacRoute.data.advisory && (
+                    <p className="pt-1 text-label-md text-tertiary leading-relaxed">{evacRoute.data.advisory}</p>
+                  )}
+                  <p className="pt-1 text-label-sm text-on-surface-variant/60">
+                    Route bends around L3/L4 hazard fields (A*) — shown as the amber dashed line on the map.
+                  </p>
+                </div>
+              ) : (
+                <div className="text-body-sm text-on-surface-variant/60 rounded-md border border-dashed border-outline-variant p-3">
+                  No safe-route available for this zone (no shelter with free capacity, or route planning unavailable).
                 </div>
               )}
             </section>
