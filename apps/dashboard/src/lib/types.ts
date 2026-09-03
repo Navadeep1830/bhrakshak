@@ -20,12 +20,12 @@ export interface DcDirective {
 }
 
 export interface Driver {
-  feature: string;
+  feature?: string;
   name: string;
-  value: string;
-  val_num: number;
-  contribution: number;
-  description: string;
+  value?: string | number;
+  val_num?: number;
+  contribution?: number;
+  description?: string;
 }
 
 export interface ZoneOut {
@@ -37,36 +37,39 @@ export interface ZoneOut {
   hazard_level: number;
   susc_mean: number;
   susc_p90: number;
-  prob_24h: number;
-  population: number;
-  road_km: number;
+  prob_24h: number | null;
+  population: number | null;
+  road_km: number | null;
 }
 
 export interface Dossier {
   zone: ZoneOut & {
-    center: [number, number];
-    rain_intensity: number;
-    rain_24h: number;
-    antecedent: number;
-    soil_moisture: number;
-    creep_mm_year: number;
-    isolation_score: number;
-    flood_index: number;
-    road_class: string;
-    threshold_tier: number;
-    ml_tier: number;
-    history: { t: number; level: number; rain: number; prob: number }[];
+    center?: [number, number];
+    rain_intensity?: number;
+    rain_24h?: number;
+    antecedent?: number;
+    soil_moisture?: number;
+    creep_mm_year?: number;
+    isolation_score?: number;
+    flood_index?: number;
+    road_class?: string;
+    threshold_tier?: number;
+    ml_tier?: number;
+    history?: { t: number; level: number; rain: number; prob: number }[];
   };
   drivers: Driver[];
   reports: {
-    id: number;
-    type: string;
-    note: string;
+    id: number | string;
+    type?: string;
+    note?: string;
     status: string;
     verdict?: { label: string; confidence: number };
-    created_at: number;
+    created_at?: number | string;
   }[];
-  weather: {
+  /** Demo contract embeds the full weather panel; the live ZoneDossier
+   *  omits it — the drawer derives an honest gauge summary from
+   *  rainfall_series / id_threshold_check instead. */
+  weather?: {
     intensity_mm_h: number;
     duration_min: number;
     band: string;
@@ -74,7 +77,18 @@ export interface Dossier {
     check: string;
     forecast_72h: { h: number; mm: number; level: number }[];
   };
-  briefing_md: string;
+  /** Live ZoneDossier extras, consumed defensively. */
+  rainfall_series?: {
+    ts?: string;
+    rain_1h?: number | null;
+    rain_24h?: number | null;
+  }[];
+  id_threshold_check?: {
+    any_breach?: boolean;
+    breach_1h?: boolean;
+    breach_24h?: boolean;
+  } | null;
+  briefing_md?: string;
 }
 
 export interface TickerEvent {
@@ -111,7 +125,7 @@ export interface RegistryRow {
 }
 
 export interface AlertRow {
-  id: number;
+  id: number | string;
   zone_code: string;
   zone_name: string;
   district: string;

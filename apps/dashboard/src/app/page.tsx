@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ShieldCheck, Loader2, LogIn, Mountain, Radar, Activity, Smartphone } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
-import { api } from "@/lib/client/api";
+import { api, endpoints } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,7 +43,16 @@ function Login({ onDone }: { onDone: () => void }) {
       });
       onDone();
     } catch (err) {
-      toast({ title: "Login failed", description: String(err), variant: "destructive" });
+      // Translate browser network failures (dead tunnel / backend down /
+      // CORS) into an actionable message instead of "TypeError: Failed to
+      // fetch", which tells the user nothing.
+      const raw = String(err);
+      const desc = /failed to fetch|load failed|networkerror/i.test(raw)
+        ? endpoints.API
+          ? `API unreachable at ${endpoints.API} — is the backend or tunnel up?`
+          : `Network error — the in-browser demo routes should always respond (${raw})`
+        : raw;
+      toast({ title: "Login failed", description: desc, variant: "destructive" });
     } finally {
       setBusy(false);
     }
@@ -92,6 +101,9 @@ function Login({ onDone }: { onDone: () => void }) {
         <div className="rounded-xl border border-outline-variant/60 bg-surface-low p-8 flex flex-col elevation-2">
           <h1 className="text-title-lg font-medium">Sign in to Command Center</h1>
           <p className="text-body-sm text-on-surface-variant mt-1">Demo instance — pick a role or type credentials.</p>
+          <p className="text-label-sm text-on-surface-variant/70 mt-0.5">
+            {endpoints.API ? `LIVE mode — API ${endpoints.API}` : "DEMO mode — in-browser data, no backend required"}
+          </p>
 
           <div className="mt-6 space-y-2">
             {QUICK_USERS.map((u) => (

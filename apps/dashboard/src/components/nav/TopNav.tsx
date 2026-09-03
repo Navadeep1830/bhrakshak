@@ -12,12 +12,14 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/client/api";
+import { api, endpoints } from "@/lib/client/api";
 import { usePoll } from "@/hooks/use-poll";
 import { useToast } from "@/hooks/use-toast";
 
 const DISTRICTS = ["East Khasi Hills", "Noney", "Aizawl", "Imphal West", "Kohima", "Gangtok"];
-const LIVE_MODE = process.env.NEXT_PUBLIC_API_URL ? true : false;
+// Truthful mode: live iff calls actually leave the browser for a real API
+// (explicit NEXT_PUBLIC_API_URL, or the *.loca.lt tunnel pairing).
+const LIVE_MODE = !!endpoints.API;
 
 export default function TopNav() {
   const { view, setView, role, fullName, logout, districtFilter, setDistrictFilter, theme, setTheme } = useAppStore();

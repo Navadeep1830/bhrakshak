@@ -120,7 +120,7 @@ export default function DossierDrawer() {
                 </span>
               </div>
               <SheetDescription className="text-body-sm">
-                {d.zone.district}, {d.zone.state} · pop {d.zone.population.toLocaleString("en-IN")} · {d.zone.road_class} corridor {d.zone.road_km} km · P(event≤24h) {(d.zone.prob_24h * 100).toFixed(1)}%
+                {d.zone.district}, {d.zone.state} · pop {(d.zone.population ?? 0).toLocaleString("en-IN")} · {d.zone.road_class} corridor {d.zone.road_km} km · P(event≤24h) {(((d.zone.prob_24h ?? 0)) * 100).toFixed(1)}%
               </SheetDescription>
               <div className="flex gap-2 pt-1">
                 <Button size="sm" variant="tonal" onClick={copyMd} className="h-8 text-label-md">
@@ -142,6 +142,11 @@ export default function DossierDrawer() {
             {/* drivers */}
             <section>
               <h3 className="text-label-md font-semibold text-primary uppercase tracking-wider mb-2">Risk drivers</h3>
+              {d.drivers.length === 0 ? (
+                <div className="text-body-sm text-on-surface-variant/60 rounded-md border border-dashed border-outline-variant p-3">
+                  No driver decomposition available in this feed.
+                </div>
+              ) : (
               <div className="space-y-2">
                 {d.drivers.map((dr) => (
                   <div key={dr.name} className="rounded-md border border-outline-variant/60 bg-surface-container p-3">
@@ -151,28 +156,47 @@ export default function DossierDrawer() {
                     </div>
                     <div className="mt-2 h-1.5 rounded-full bg-surface-highest overflow-hidden">
                       <div className="h-full rounded-full bg-primary"
-                        style={{ width: `${Math.round(dr.contribution * 100)}%` }} />
+                        style={{ width: `${Math.round((dr.contribution ?? 0) * 100)}%` }} />
                     </div>
                     <div className="mt-1.5 text-label-sm text-on-surface-variant/80 leading-relaxed">{dr.description}</div>
                   </div>
                 ))}
               </div>
+              )}
             </section>
 
             <Separator />
 
             {/* charts */}
             <section className="grid gap-3">
-              <div className="rounded-md border border-outline-variant/60 bg-surface-container p-2">
-                <div className="text-label-sm text-on-surface-variant px-1 pb-1">72h rainfall projection (mm/h)</div>
-                <ReactECharts option={rainOption} style={{ height: 120 }} opts={{ renderer: "svg" }} />
-              </div>
-              <div className="rounded-md border border-outline-variant/60 bg-surface-container p-2">
-                <div className="text-label-sm text-on-surface-variant px-1 pb-1">
-                  24h history — probability (green) · level/4 (orange)
+              {(d.weather?.forecast_72h?.length ?? 0) > 0 ? (
+                <div className="rounded-md border border-outline-variant/60 bg-surface-container p-2">
+                  <div className="text-label-sm text-on-surface-variant px-1 pb-1">72h rainfall projection (mm/h)</div>
+                  <ReactECharts option={rainOption} style={{ height: 120 }} opts={{ renderer: "svg" }} />
                 </div>
-                <ReactECharts option={probOption} style={{ height: 120 }} opts={{ renderer: "svg" }} />
-              </div>
+              ) : (
+                <div className="rounded-md border border-outline-variant/60 bg-surface-container p-2">
+                  <div className="text-label-sm text-on-surface-variant px-1 pb-1">72h rainfall projection (mm/h)</div>
+                  <div className="text-body-sm text-on-surface-variant/60 px-1 py-4 text-center">
+                    No forecast projection in this feed — gauge shows {(d.rainfall_series?.length ?? 0)} obs / 72h.
+                  </div>
+                </div>
+              )}
+              {(d.zone.history?.length ?? 0) > 0 ? (
+                <div className="rounded-md border border-outline-variant/60 bg-surface-container p-2">
+                  <div className="text-label-sm text-on-surface-variant px-1 pb-1">
+                    24h history — probability (green) · level/4 (orange)
+                  </div>
+                  <ReactECharts option={probOption} style={{ height: 120 }} opts={{ renderer: "svg" }} />
+                </div>
+              ) : (
+                <div className="rounded-md border border-outline-variant/60 bg-surface-container p-2">
+                  <div className="text-label-sm text-on-surface-variant px-1 pb-1">24h history</div>
+                  <div className="text-body-sm text-on-surface-variant/60 px-1 py-4 text-center">
+                    No 24h probability history in this feed.
+                  </div>
+                </div>
+              )}
             </section>
 
             <Separator />
@@ -182,14 +206,20 @@ export default function DossierDrawer() {
               <h3 className="text-label-md font-semibold text-primary uppercase tracking-wider mb-2">
                 Intensity–duration check
               </h3>
-              <div className="rounded-md border border-outline-variant/60 bg-surface-container p-3 text-body-sm space-y-1">
-                <div className="flex justify-between"><span className="text-on-surface-variant">Intensity</span><span>{d.weather.intensity_mm_h} mm/h</span></div>
-                <div className="flex justify-between"><span className="text-on-surface-variant">Duration</span><span>{d.weather.duration_min} min</span></div>
-                <div className="flex justify-between"><span className="text-on-surface-variant">Susc. band</span><span className="capitalize">{d.weather.band}</span></div>
-                <div className="pt-1 font-medium" style={{ color: LEVEL_COLORS[Math.min(4, d.zone.threshold_tier)] }}>
-                  {d.weather.check}
+              {d.weather ? (
+                <div className="rounded-md border border-outline-variant/60 bg-surface-container p-3 text-body-sm space-y-1">
+                  <div className="flex justify-between"><span className="text-on-surface-variant">Intensity</span><span>{d.weather.intensity_mm_h} mm/h</span></div>
+                  <div className="flex justify-between"><span className="text-on-surface-variant">Duration</span><span>{d.weather.duration_min} min</span></div>
+                  <div className="flex justify-between"><span className="text-on-surface-variant">Susc. band</span><span className="capitalize">{d.weather.band}</span></div>
+                  <div className="pt-1 font-medium" style={{ color: LEVEL_COLORS[Math.min(4, d.zone.threshold_tier ?? d.zone.hazard_level)] }}>
+                    {d.weather.check}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="text-body-sm text-on-surface-variant/60 rounded-md border border-dashed border-outline-variant p-3">
+                  No gauge or weather data for this zone in the current feed.
+                </div>
+              )}
             </section>
 
             {/* field reports */}
@@ -211,7 +241,7 @@ export default function DossierDrawer() {
                           r.status === "pending" ? "bg-tertiary-container text-on-tertiary-container" :
                           "bg-surface-highest text-on-surface-variant"
                         }`}>{r.status}</span>
-                        <span className="text-label-md text-on-surface-variant/70">{new Date(r.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="text-label-md text-on-surface-variant/70">{r.created_at ? new Date(r.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
                       </div>
                       <p className="mt-1 text-on-surface/90">{r.note}</p>
                       {r.verdict && (

@@ -1,10 +1,12 @@
 // Client-side API helpers.
 // DEMO MODE (default): all calls go to the in-memory Next.js route handlers
-// mounted at /api/v1/* — the dashboard runs fully standalone.
-// LIVE MODE: set NEXT_PUBLIC_API_URL (e.g. http://localhost:8000) and every
-// call is routed to the real FastAPI backend with the same contract.
-// Serving the dashboard over https without an explicit URL assumes the
-// public api localtunnel (phone-to-PC demo workflow).
+// mounted at /api/v1/* — the dashboard runs fully standalone. Any https
+// origin that is NOT a *.loca.lt tunnel also runs demo (preview hosts,
+// static deploys) — never depend on a backend that may not be running.
+// LIVE MODE: (a) NEXT_PUBLIC_API_URL set explicitly (e.g.
+// http://localhost:8000), or (b) the dashboard itself is served from a
+// *.loca.lt localtunnel (phone-to-PC demo workflow) -> auto-pair with the
+// API tunnel https://bhrakshak-api-demo.loca.lt.
 import type {
   Dossier, KpisOut, AlertRow, PriorityRow, RegistryRow, LoginResponse,
   MeResponse, AuthSession, LoginUser,
@@ -14,7 +16,12 @@ import type {
 function getApiUrl(): string {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
   if (typeof window !== "undefined" && window.location.protocol === "https:") {
-    return "https://bhrakshak-api-demo.loca.lt";
+    // Auto-live ONLY when the dashboard itself is tunnelled (*.loca.lt) —
+    // that is the workflow the API tunnel belongs to. Preview hosts and
+    // other https deploys stay in demo mode so the app always boots.
+    if (/(^|\.)loca\.lt$/.test(window.location.hostname)) {
+      return "https://bhrakshak-api-demo.loca.lt";
+    }
   }
   return "";
 }
@@ -31,6 +38,103 @@ async function j<T>(res: Response): Promise<T> {
 
 const authHeaders = (token?: string | null): Record<string, string> | undefined =>
   token ? { Authorization: `Bearer ${token}` } : undefined;
+
+// ---- live/demo contract normalization ---------------------------------
+// The in-app demo routes and the FastAPI backend answer a few endpoints
+// with different response shapes (dossier / priority / alerts). These
+// adapters map EITHER contract onto the client types so no view ever
+// reads a field that is undefined.
+
+const num = (v: unknown, dflt = 0): number =>
+  typeof v === "number" && Number.isFinite(v) ? v : dflt;
+
+function normAlert(a: Record<string, unknown>): AlertRow {
+  return {
+    id: typeof a.id === "string" ? a.id : num(a.id),
+    zone_code: String(a.zone_code ?? ""),
+    zone_name: String(a.zone_name ?? a.zone_id ?? "—"),
+    district: String(a.district ?? ""),
+    level: num(a.level),
+    message: String(a.message ?? a.message_template ?? ""),
+    channels: Array.isArray(a.channels) ? (a.channels as string[]) : [],
+    created_at: num(a.created_at, a.fired_at ? Date.parse(String(a.fired_at)) : Date.now()),
+    ack: typeof a.ack === "boolean" ? a.ack : a.ack_at != null,
+    ack_by: a.ack_by as string | undefined,
+  };
+}
+
+function normPriority(r: Record<string, unknown>): PriorityRow {
+  // demo isolation is 0..1, live is 0..100 — normalize to 0..1
+  const iso = num(r.isolation);
+  return {
+    zone_id: String(r.zone_id ?? r.id ?? ""),
+    zone_code: String(r.zone_code ?? "—"),
+    name: String(r.name ?? r.zone_name ?? "Zone"),
+    district: String(r.district ?? ""),
+    level: num(r.level, num(r.hazard_level)),
+    population: num(r.population),
+    isolation: iso > 1 ? iso / 100 : iso,
+    roads_blocked: num(r.roads_blocked),
+    priority: num(r.priority, num(r.score)),
+    sops: Array.isArray(r.sops) ? (r.sops as PriorityRow["sops"]) : [],
+    team: (r.team as string | null) ?? null,
+    status: (r.status as PriorityRow["status"]) ?? "open",
+  };
+}
+
+function normDossier(raw: Record<string, any>): Dossier {
+  const zone = raw.zone ?? {};
+  const series: Record<string, any>[] = Array.isArray(raw.rainfall_series) ? raw.rainfall_series : [];
+  const last = series.length ? series[series.length - 1] : null;
+  const idc = raw.id_threshold_check ?? null;
+  const susc = typeof zone.susc_mean === "number" ? zone.susc_mean : null;
+  // Demo embeds the weather panel; live ZoneDossier does not — derive an
+  // honest gauge summary from its rainfall series instead of crashing.
+  const weather: Dossier["weather"] = raw.weather ?? (last
+    ? {
+        intensity_mm_h: num(last.rain_1h),
+        duration_min: Math.max(60, series.length * 60),
+        band: susc == null ? "—" : susc >= 75 ? "high" : susc >= 50 ? "medium" : "low",
+        threshold: [],
+        check: idc
+          ? (idc as { any_breach?: boolean }).any_breach
+            ? "I-D envelope breached (live gauge)"
+            : "Within I-D envelope (live gauge)"
+          : `Live gauge — ${series.length} obs in 72h window`,
+        forecast_72h: [],
+      }
+    : undefined);
+  return {
+    ...raw,
+    zone: {
+      ...zone,
+      hazard_level: num(zone.hazard_level),
+      population: num(zone.population),
+      road_km: num(zone.road_km),
+      prob_24h: num(zone.prob_24h),
+      road_class: zone.road_class ?? "access",
+      threshold_tier: num(zone.threshold_tier, num(zone.hazard_level)),
+      ml_tier: num(zone.ml_tier, num(zone.hazard_level)),
+      history: Array.isArray(zone.history) ? zone.history : [],
+    },
+    drivers: (Array.isArray(raw.drivers) ? raw.drivers : []).map((dr: Record<string, any>) => ({
+      ...dr,
+      name: String(dr.name ?? dr.feature ?? "driver"),
+      value: dr.value ?? dr.val_num ?? "—",
+      contribution: num(dr.contribution),
+      description: dr.description ?? "",
+    })),
+    reports: (Array.isArray(raw.reports) ? raw.reports : []).map((r: Record<string, any>) => ({
+      ...r,
+      id: r.id ?? "",
+      status: r.status ?? "pending",
+      note: r.note ?? r.description ?? "",
+      type: r.type ?? r.category ?? "other",
+    })),
+    weather,
+    briefing_md: raw.briefing_md ?? "",
+  };
+}
 
 const B = endpoints.API;
 // localtunnel interstitial bypass (no-op against a direct backend)
@@ -77,7 +181,8 @@ export const api = {
 
   dossier: (zoneId: string, token: string | null) =>
     fetch(`${B}/api/v1/zones/${zoneId}/dossier`, { headers: { ...tunnelHeaders, ...authHeaders(token) } })
-      .then(j<Dossier>),
+      .then(j<Record<string, any>>)
+      .then(normDossier),
 
   briefing: (zoneId: string, token: string | null) =>
     fetch(`${B}/api/v1/analytics/briefing-dossier/${zoneId}`, { headers: { ...tunnelHeaders, ...authHeaders(token) } })
@@ -87,9 +192,11 @@ export const api = {
     fetch(`${B}/api/v1/zones/${zoneId}/weather`, { headers: tunnelHeaders }).then(j<WeatherOut>),
 
   alerts: (token: string | null) =>
-    fetch(`${B}/api/v1/alerts`, { headers: { ...tunnelHeaders, ...authHeaders(token) } }).then(j<AlertRow[]>),
+    fetch(`${B}/api/v1/alerts`, { headers: { ...tunnelHeaders, ...authHeaders(token) } })
+      .then(j<Record<string, any>[]>)
+      .then((rows) => rows.map(normAlert)),
 
-  ackAlert: (id: number, token: string | null) =>
+  ackAlert: (id: number | string, token: string | null) =>
     fetch(`${B}/api/v1/alerts/${id}/ack`, { method: "POST", headers: authHeaders(token) })
       .then(j<{ acked: number }>),
 
@@ -102,7 +209,8 @@ export const api = {
 
   priority: (token: string | null) =>
     fetch(`${B}/api/v1/analytics/priority`, { headers: { ...tunnelHeaders, ...authHeaders(token) } })
-      .then(j<PriorityRow[]>),
+      .then(j<Record<string, any>[]>)
+      .then((rows) => rows.map(normPriority)),
 
   applySop: (zoneId: string, sopId: string, token: string | null) =>
     fetch(`${B}/api/v1/analytics/priority`, {

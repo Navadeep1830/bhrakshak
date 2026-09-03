@@ -22,6 +22,22 @@ if (typeof window !== "undefined") {
   setWorkerUrl("/maplibre-gl-worker.mjs");
 }
 
+// Basemap raster (© OpenStreetMap contributors — same source the previous
+// dashboard used; free with attribution, no API key). Added after style load
+// under all data layers; if the network is down the tiles simply never paint
+// and the M3 surface background remains, with hex/road/report layers fully
+// live (offline-safe by construction). Raster paint props give the OSM tiles
+// an M3 look: dimmed + desaturated in dark theme, natural in light.
+const OSM_TILES = [
+  "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+];
+const basemapPaint = (theme: string): Record<string, number> =>
+  theme === "light"
+    ? { "raster-opacity": 1, "raster-saturation": 0, "raster-brightness-max": 1 }
+    : { "raster-opacity": 0.92, "raster-saturation": -0.55, "raster-brightness-max": 0.78 };
+
 const emptyStyle: StyleSpecification = {
   version: 8,
   sources: {},
@@ -39,7 +55,7 @@ export default function MapView({ onInjectResult }: { onInjectResult?: (n: numbe
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const popupRef = useRef<Popup | null>(null);
-  const { selectedZoneId, selectZone, districtFilter, horizon, radarStep, layers, role, token } = useAppStore();
+  const { selectedZoneId, selectZone, districtFilter, horizon, radarStep, layers, role, token, theme } = useAppStore();
   const { toast } = useToast();
   const [stormBusy, setStormBusy] = useState(false);
   const [stormActive, setStormActive] = useState(false);
@@ -65,6 +81,25 @@ export default function MapView({ onInjectResult }: { onInjectResult?: (n: numbe
     map.addControl(new AttributionControl({ compact: true }), "bottom-right");
 
     map.on("load", () => {
+      // --- basemap raster: OpenStreetMap under every data layer (roads,
+      // place labels, terrain context the empty M3 style lacked); dimmed +
+      // desaturated via raster paint in dark theme. Fails gracefully
+      // offline (dark bg + hexes still fully live).
+      map.addSource("basemap", {
+        type: "raster",
+        tiles: OSM_TILES,
+        tileSize: 256,
+        maxzoom: 19,
+        attribution:
+          '<a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap contributors</a>',
+      });
+      map.addLayer({
+        id: "basemap",
+        type: "raster",
+        source: "basemap",
+        paint: basemapPaint(useAppStore.getState().theme),
+      });
+
       // --- GeoJSON sources served by the in-app API
       for (const src of ["zones", "roads", "report_points"]) {
         map.addSource(src, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
@@ -87,9 +122,9 @@ export default function MapView({ onInjectResult }: { onInjectResult?: (n: numbe
         paint: {
           "fill-color": [
             "interpolate", ["linear"], ["get", "hazard_level"],
-            0, "#0B3A2A", 1, "#1E6B3C", 2, "#9A7B18", 3, "#C25615", 4, "#C21F1F",
+            0, "#17503A", 1, "#2E7D4F", 2, "#9A7B18", 3, "#C25615", 4, "#C21F1F",
           ],
-          "fill-opacity": 0.62,
+          "fill-opacity": 0.66,
         },
       });
       // susceptibility (Model A) alternative fill
@@ -224,6 +259,17 @@ export default function MapView({ onInjectResult }: { onInjectResult?: (n: numbe
       mapRef.current = null;
     };
   }, [selectZone]);
+
+  // re-tint the basemap when the M3 color scheme flips (paint props, no
+  // tile swap needed; no-op until the layer exists).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer("basemap")) return;
+    const paint = basemapPaint(theme);
+    for (const [prop, val] of Object.entries(paint)) {
+      map.setPaintProperty("basemap", prop as "raster-opacity", val);
+    }
+  }, [theme]);
 
   // ---------------------------------------------------------------- data
   useEffect(() => {
