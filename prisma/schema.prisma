@@ -1,0 +1,290 @@
+// BhuRakshak v3 — AI Landslide Early Warning (SIH26001)
+// Real backend schema: zones (hex grid), risk snapshots, rainfall, alerts,
+// citizen reports, road status, shelters, sensors, i18n, auth.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  fullName      String
+  role          String // admin | district_admin | field_official | citizen
+  district      String?
+  hashedPassword String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ackedAlerts   AlertAck[]
+  reports       CitizenReport[]
+  checkins      SafeCheckin[]
+}
+
+model Zone {
+  id             String  @id @default(cuid())
+  zoneCode       String  @unique
+  name           String
+  district       String
+  state          String
+  geom           String // JSON ring: [[lon,lat]x6]
+  centroidLat    Float
+  centroidLon    Float
+  radiusKm       Float   @default(3.0)
+  suscMean       Float
+  suscP90        Float
+  population     Int
+  roadKm         Float
+  criticalInfra  String  @default("{}") // JSON: {schools, phcs, bridges}
+
+  riskCell       RiskCell?
+  rainfall       RainfallObs[]
+  snapshots      RiskSnapshot[]
+  alerts         Alert[]
+  sensors        SensorReading[]
+  reports        CitizenReport[]
+  escalations    EscalationState?
+}
+
+// Latest fused hazard state per zone (the "live" cell)
+model RiskCell {
+  id           String   @id @default(cuid())
+  zoneId       String   @unique
+  zone         Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  hazardLevel  Int      @default(0)
+  probability  Float    @default(0)
+  modelVersion String   @default("physical-prior-v1")
+  drivers      String   @default("[]") // JSON driver breakdown
+  updatedAt    DateTime @updatedAt
+}
+
+// Hysteresis bookkeeping per zone (anti-flapping escalation state)
+model EscalationState {
+  id           String @id @default(cuid())
+  zoneId       String @unique
+  zone         Zone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  candidate    Int    @default(0)
+  aboveStreak  Int    @default(0)
+  belowStreak  Int    @default(0)
+}
+
+model RainfallObs {
+  id           String   @id @default(cuid())
+  zoneId       String
+  zone         Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  ts           DateTime @default(now())
+  rain1h       Float    @default(0)
+  rain24h      Float    @default(0)
+  rain48h      Float?
+  rain72h      Float?
+  rain7d       Float?
+  effRain      Float?
+  soilMoisture Float?
+  source       String   @default("poll") // poll | storm | sim
+
+  @@index([zoneId, ts])
+}
+
+model RiskSnapshot {
+  id           String   @id @default(cuid())
+  zoneId       String
+  zone         Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  ts           DateTime @default(now())
+  hazardLevel  Int
+  probability  Float
+  modelVersion String
+  rain24h      Float    @default(0)
+  rain1h       Float    @default(0)
+
+  @@index([zoneId, ts])
+  @@index([ts])
+}
+
+model Alert {
+  id          String   @id @default(cuid())
+  zoneId      String
+  zone        Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  level       Int // 1..4
+  title       String
+  message     String // English rendering
+  languages   String   @default("{}") // JSON {lang: message} — 8 languages
+  channels    String   @default("[]") // JSON ["push","sms",...]
+  probability Float    @default(0)
+  status      String   @default("active") // active | acked | allclear
+  acks        AlertAck[]
+  createdAt   DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model AlertAck {
+  id        String   @id @default(cuid())
+  alertId   String
+  alert     Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([alertId, userId])
+}
+
+model CitizenReport {
+  id            String   @id @default(cuid())
+  zoneId        String?
+  zone          Zone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  category      String // crack | slope_movement | blocked_road | past_slide | water_seepage
+  notes         String?
+  lat           Float
+  lon           Float
+  aiPreScreen   String?  @default("pending") // pending | ok | flagged
+  aiConfidence  Float?
+  aiSource      String?  // vision+heuristic | heuristic
+  aiFindings    String?  // one-line VLM finding
+  status        String   @default("pending") // pending | verified | rejected
+  submittedById String?
+  submitter     User?    @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  deviceId      String?  // field-app device that captured it
+  clientCreatedAt DateTime? // when the citizen actually took it (offline queue)
+  offlineQueued Boolean  @default(false) // true = captured offline, synced later
+  createdAt     DateTime @default(now())
+  verifiedAt    DateTime?
+  photo         MediaAsset?
+
+  @@index([status, createdAt])
+}
+
+model MediaAsset {
+  id        String   @id @default(cuid())
+  reportId  String   @unique
+  report    CitizenReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  filename  String   // on-disk name under upload/
+  mime      String   @default("image/jpeg")
+  bytes     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// Field phones registered with the platform (the citizen/field PWA)
+model Device {
+  id         String   @id @default(cuid())
+  deviceId   String   @unique
+  name       String
+  phone      String?
+  district   String?  // null = subscribes to all districts
+  platform   String   @default("pwa")
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  smsMessages SmsMessage[]
+}
+
+// Fan-out notification events (in-app notification center)
+model NotificationEvent {
+  id           String   @id @default(cuid())
+  kind         String   // landslide_alert | report_flagged | allclear | system
+  level        Int      @default(0)
+  title        String
+  body         String
+  zoneId       String?
+  zoneCode     String?
+  district     String?
+  probability  Float?
+  channels     String   @default("[]") // JSON ["push","sms"]
+  reportId     String?
+  createdAt    DateTime @default(now())
+  sms          SmsMessage[]
+
+  @@index([createdAt])
+  @@index([kind, createdAt])
+}
+
+// Simulated SMS gateway outbox (real Twilio/BSNL gateway slot-in point)
+model SmsMessage {
+  id             String   @id @default(cuid())
+  notificationId String
+  notification   NotificationEvent @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  deviceId       String?
+  device         Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  phone          String
+  body           String
+  status         String   @default("sent") // sent | delivered | failed
+  queuedAt       DateTime @default(now())
+  sentAt         DateTime @default(now())
+  deliveredAt    DateTime? // set = future delivery moment; settleSms() flips status
+
+  @@index([status])
+  @@index([queuedAt])
+}
+
+model RoadStatus {
+  id        String   @id @default(cuid())
+  roadName  String
+  district  String
+  coords    String // JSON [[lon,lat]...]
+  status    String   @default("open") // open | watch | blocked
+  source    String   @default("seed") // seed | model | report
+  note      String?
+  updatedAt DateTime @updatedAt
+}
+
+model Shelter {
+  id             String  @id @default(cuid())
+  name           String
+  district       String
+  lat            Float
+  lon            Float
+  shelterType    String  @default("community_hall")
+  capacity       Int     @default(200)
+  occupancy      Int     @default(0)
+  hasMedical     Boolean @default(false)
+  slopeDeg       Float   @default(12)
+  distToSlopeM   Float   @default(300)
+}
+
+model SensorReading {
+  id           String   @id @default(cuid())
+  zoneId       String
+  zone         Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  ts           DateTime @default(now())
+  soilMoisture Float?
+  tiltDeg      Float?
+  rainMm       Float?
+  battery      Float?
+
+  @@index([zoneId, ts])
+}
+
+model SafeCheckin {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lat       Float
+  lon       Float
+  zoneCode  String?
+  message   String?
+  createdAt DateTime @default(now())
+}
+
+model I18nTemplate {
+  id       String @id @default(cuid())
+  key      String // alert.l1 | alert.l2 | ... | alert.allclear
+  lang     String // en hi bn as ne kha lus mni
+  template String
+
+  @@unique([key, lang])
+}
+
+model ModelRun {
+  id        String   @id @default(cuid())
+  name      String
+  version   String
+  metrics   String   @default("{}") // JSON
+  notes     String?
+  createdAt DateTime @default(now())
+}
