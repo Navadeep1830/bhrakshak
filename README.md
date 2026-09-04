@@ -8,45 +8,63 @@ One Next.js app contains both halves:
 | Surface | What it is |
 |---|---|
 | **Website Command Center** (`/`) | Map (satellite/terrain/street), district drill-down Risk Explorer, Operations (alerts, report inbox, roads, Comms & SMS), Analytics (live engine telemetry), **Simulation** tab (manual condition injection), Field Report |
-| **Field phone app — APK** (`/mobile`) | Real installable Android app (`apk/BhuRakshakField-v1.0.apk`): street map with hazard hexes + alternative safe routes (turn-by-turn), street view scan, offline crack-photo capture + auto-sync, notification + SMS inbox, manual location picker, **Comms tab — two-way messaging with the command centre (SOS/help/status), I'M SAFE check-in, rain-gauge reading that runs the live risk engine** |
+| **Field phone app — APK** (`apk/BhuRakshakField-v2.0.apk`) | Real **native** Android app: ⚠ ALERTS (live feed + emergency banner + SMS inbox), 💬 CHAT (**two-way messaging with the command centre** — SOS/help/status/info with GPS, offline queue), 🗺 MAP (street map with hazard hexes + alternative safe routes turn-by-turn, street view, offline crack-photo capture + auto-sync), ☰ STATUS (**I'M SAFE** check-in, **rain-gauge reading that runs the live risk engine**). Background service → heads-up notifications + **full-screen L4 emergency alarm**, restarts after reboot |
 | **Field phone app — in browser** (Field App button, auto-opens on < 640 px) | Same app embedded in the website for big-screen demos |
 
 Everything runs on **zero external API keys** — Esri/OpenTopoMap/OpenStreetMap tiles, local SQLite, in-process engines.
 
 ---
 
-## The Android APK (real app, not a shortcut)
+## The Android APK — a real NATIVE app (v2.0)
 
-`apk/BhuRakshakField-v1.0.apk` — install it on any Android 7+ phone ("install unknown apps"
-must be allowed; it is debug-signed, which is normal for hackathon builds):
+`apk/BhuRakshakField-v2.0.apk` — install on any Android 7+ phone (allow "install
+unknown apps"; it is debug-signed, which is normal for hackathon builds).
 
-1. Start the server on the command-center laptop: `npm run dev`
-2. Connect the phone to the **same Wi-Fi / hotspot**, find the laptop's IP
-   (`ipconfig` on Windows, `ip a` on Linux/Mac)
-3. Open **BhuRakshak Field** on the phone → enter `http://<laptop-ip>:3000` → **Connect**
+**Why it's small (~53 KB) on purpose:** it is a fully native Android app built with
+**zero external dependencies** — no Gradle, no AndroidX, no Kotlin runtime (that's
+what makes typical apps 8 MB+). Every byte is our own code: 9 Java classes, plain
+Android framework widgets, `HttpURLConnection` + `org.json`. It does MORE than a
+WebView shell — alert polling, chat and emergency alarms run natively.
 
-The app remembers the server and connects straight to it from then on. The connect
-screen actually **tests the connection** first (health ping with a clear error if the
-server is unreachable) — no more guessing. It registers as a **real device** (visible
-in Operations → Comms & SMS on the website), receives live alert fan-out
-(notifications + SMS inbox), plans routes, submits photo reports and queues them
-offline, and **messages the command centre** — all against the live engine.
+**Four native tabs:**
 
-**Can't connect? (checklist)**
-1. `npm run dev` prints two addresses — use the **Network** one (`http://<ip>:3000`), not localhost.
-   (The dev server binds `0.0.0.0`, so it IS reachable from the phone — that's the default now.)
-2. Phone and laptop on the **same Wi-Fi/hotspot**.
-3. **Windows firewall**: allow Node.js for private networks (Windows asks on first run — tick "Private networks").
-4. Find the laptop IP: `ipconfig` (Windows) / `ip a` (Linux). Don't type `127.0.0.1` — that's the phone itself (the app warns you).
-5. Venue Wi-Fi blocking device-to-device traffic? Use the **laptop's phone hotspot** instead — most reliable.
+| Tab | What it does (native, no page loading) |
+|-----|------------------------------------------|
+| ⚠ ALERTS | Live alert feed (L0–L4 colour-coded) + **active-emergency banner** + SMS fan-out inbox |
+| 💬 CHAT | **Two-way messaging with the command centre** — SOS / help / status / info, GPS-attached, command replies appear in-thread; offline queue auto-flushes |
+| 🗺 MAP | The full field app (`/mobile`): street map, 3 alternative routes turn-by-turn, hazard marks, street view, crack-photo reports with AI pre-screen + offline sync |
+| ☰ STATUS | Connection & device identity, **I'M SAFE check-in**, **manual rain-gauge reading → real engine pass** |
 
-- The phone client loads the server's `/mobile` route — a standalone, login-free
-  surface (device auth, not website accounts).
-- Server down? The app shows a retry / change-server screen.
-- Want to rebuild or modify it? `android/` holds the full client source
-  (WebView shell, no dependencies) and `android/build.sh` rebuilds the APK with
-  plain SDK tools (no Gradle). Keystore `android/keystore.jks` (pass `bhrakshak`)
-  keeps signatures consistent — rotate it before any Play Store release.
+**Background alarm service** (like the friend's v2 architecture): a foreground
+service polls every 15 s and raises **heads-up system notifications** for L3+
+alerts, a **full-screen emergency alarm** (alarm sound + vibration, shows over
+the lock screen) for L4, and restarts itself after reboot. The command centre
+sees ACKs from the field as status messages in the Field-messages inbox.
+
+**Connect flow:** first launch → native connect screen → type the server
+(e.g. `10.66.1.19:3100` — no scheme needed) → **TEST CONNECTION** health-pings
+it and, if anything is wrong, tells you *exactly* what's broken and how to fix
+it (host not found / port closed / firewall dropping / wrong port) → Connect
+registers the device and opens the app. Changing servers later: STATUS → Change server.
+
+### Can't connect? (the app now diagnoses this for you)
+1. The server must be running on a machine the phone can reach: `npm run dev -- -p 3100`
+   (the dev server binds `0.0.0.0`, so it IS reachable from the phone — that's the default).
+2. Phone and server machine on the **same Wi-Fi / hotspot**. On the server: use the
+   **Network** address it prints (e.g. `http://10.66.1.19:3100`), never `localhost`.
+3. **Windows firewall**: allow Node.js for private networks (Windows asks on first
+   run — tick "Private networks"). Symptom: "connection refused" or timeouts.
+4. Venue Wi-Fi blocking device-to-device traffic? Use the **phone's hotspot** on the
+   laptop instead — most reliable.
+5. `127.0.0.1` / `localhost` typed into the app points at the PHONE itself — the app warns you.
+
+- The MAP tab loads the server's `/mobile` route — a standalone, login-free surface
+  (device auth, not website accounts). Server down? Retry / change-server screen.
+- Rebuild or modify it: `android/` holds the full client source (pure Java, no
+  dependencies) and `android/build.sh` rebuilds the APK with plain SDK tools
+  (javac → d8 → aapt2 → zipalign → apksigner, no Gradle needed). Keystore
+  `android/keystore.jks` (pass `bhrakshak`) keeps signatures consistent — rotate
+  it before any Play Store release.
 
 ---
 

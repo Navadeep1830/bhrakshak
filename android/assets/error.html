@@ -53,13 +53,18 @@
   if (server) {
     document.getElementById('sub').innerHTML =
       'Trying <code>' + server + '</code> — make sure the server is running ' +
-      '(<code>npm run dev</code>) and the phone is on the same Wi-Fi.';
+      '(<code>npm run dev -- -p &lt;port&gt;</code>) and the phone is on the same Wi-Fi. ' +
+      'Heads-up alerts keep polling in the background meanwhile.';
   }
+  // Prefer the native bridge (Bhrak) when running inside the APK — it
+  // reloads the map tab / opens the native Connect screen directly.
   function retry() {
+    if (window.Bhrak && window.Bhrak.retry) { window.Bhrak.retry(); return; }
     location.href = (server || '') + '/mobile';
   }
   function change() {
-    location.href = 'file:///android_asset/start.html';
+    if (window.Bhrak && window.Bhrak.changeServer) { window.Bhrak.changeServer(); return; }
+    location.href = (server || 'http://localhost:3000') + '/mobile';
   }
 </script>
 </body>

@@ -47,12 +47,20 @@ Press **Reset** afterwards to stand the district down.
 
 ## 4. Field phone app — the citizen side (90 s)
 
-**Install the real APK on a judge's phone** (`apk/BhuRakshakField-v1.0.apk` in the repo —
+**Install the real APK on a judge's phone** (`apk/BhuRakshakField-v2.0.apk` in the repo —
 allow "install unknown apps", it's a debug-signed build), then connect it to the laptop
-server: laptop runs `npm run dev`, phone on the same Wi-Fi/hotspot, APK asks for the
-server address once (`http://<laptop-ip>:3000`) and remembers it. From then on it IS the
-field app — same device identity the command center sees in Operations → Comms & SMS.
+server: laptop runs `npm run dev -- -p 3100`, phone on the same Wi-Fi/hotspot, the APK's
+native connect screen takes `http://<laptop-ip>:3100` (no scheme needed) — **TEST
+CONNECTION** health-pings it and tells you exactly what's wrong if anything fails, then
+**Connect** registers the device and remembers the server. From then on it IS the field
+app — same device identity the command center sees in Operations → Comms & SMS.
 (The in-website Field App view still works for big-screen demos.)
+
+The APK is a **real native app**: four native tabs (⚠ ALERTS · 💬 CHAT · 🗺 MAP · ☰ STATUS)
+plus a background service that raises **heads-up notifications** for L3+ and a
+**full-screen L4 emergency alarm** (alarm sound + vibration, over the lock screen) —
+even with the app closed. ~53 KB because it has zero external dependencies (no
+Gradle/AndroidX/Kotlin runtime — that's what makes typical apps 8 MB+).
 
 1. **Manual location**: "Judges, I'm not in the North East right now — so I place myself there."
    Pin-edit button → tap the map (or place button → a district's worst zone). Position persists.
@@ -103,7 +111,7 @@ field app — same device identity the command center sees in Operations → Com
 | "What if there's no internet?" | Field app caches state; crack photos queue on-device and sync when the network returns. (Bluetooth mesh is the planned next layer for no-network valleys.) |
 | "Why is SMS simulated?" | The fan-out engine, templates, scoping and delivery states are real; the transport is a dry-run gateway that is the documented slot-in point for Twilio/BSNL credentials. |
 | "Does the app actually talk to the dashboard?" | Yes, both ways: SOS/help/status messages from the phone land in Operations → Field messages; command replies appear on the phone within seconds (10 s poll). Plus I'M SAFE check-ins, gauge readings that run the engine, and full alert/SMS fan-out to the device. |
-| "Is the APK a real app or a shortcut?" | A real installable Android client (repo: `android/`): a WebView shell that registers as a device and talks to the live engine — map, routes, photo reports, notifications. It connects to any BhuRakshak server over Wi-Fi; source + build script are in the repo. |
+| "Is the APK a real app or a shortcut?" | A real **native** Android app (repo: `android/`, pure Java, zero dependencies): native alert polling with heads-up notifications + full-screen L4 emergency alarm, native two-way chat with the command centre, native I'M SAFE / rain-gauge submissions, plus the full map app in the MAP tab. It connects to any BhuRakshak server over Wi-Fi; source + build script (no Gradle) are in the repo. |
 | "How is this different from IMD alerts?" | We fuse zone-level susceptibility with rainfall intensity-duration thresholds and a calibrated probability prior, with anti-flapping hysteresis — village-level, not district-level, and per-road detours. |
 | "Model accuracy?" | Transparent by design: the I-D thresholds and prior are auditable (shown in the prediction card); the registry reports live telemetry instead of offline AUCs. |
 

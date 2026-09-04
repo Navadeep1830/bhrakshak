@@ -10,7 +10,7 @@
 #   SDK_ROOT  — Android SDK with platforms;android-34 + build-tools;34.0.0
 #   (default /home/z/android-tools/android-sdk)
 #
-# Output: ../apk/BhuRakshakField-v1.0.apk
+# Output: ../apk/BhuRakshakField-v2.0.apk
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -21,15 +21,15 @@ BT="$SDK_ROOT/build-tools/34.0.0"
 PLATFORM="$SDK_ROOT/platforms/android-34/android.jar"
 export PATH="$JDK_HOME/bin:$BT:$PATH"
 
-VERSION_CODE="${VERSION_CODE:-1}"
-VERSION_NAME="${VERSION_NAME:-1.0}"
+VERSION_CODE="${VERSION_CODE:-2}"
+VERSION_NAME="${VERSION_NAME:-2.0}"
 OUT="apk/BhuRakshakField-v${VERSION_NAME}.apk"
 
 echo "── [1/7] compiling java"
 rm -rf build && mkdir -p build/classes build/dex
 javac -source 11 -target 11 -encoding UTF-8 \
       -cp "$PLATFORM" -d build/classes \
-      $(find java -name '*.java') 2>&1 | grep -v '^warning' || true
+      $(find java -name '*.java')
 
 echo "── [2/7] launcher icon"
 if [ ! -f res/mipmap-xxxhdpi/ic_launcher.png ]; then

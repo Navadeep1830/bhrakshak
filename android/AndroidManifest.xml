@@ -1,13 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="in.bhrakshak.fieldapp"
-    android:versionCode="1"
-    android:versionName="1.0">
+    android:versionCode="2"
+    android:versionName="2.0">
 
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <uses-permission android:name="android.permission.VIBRATE"/>
+  <uses-permission android:name="android.permission.WAKE_LOCK"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
 
   <application
       android:label="@string/app_name"
@@ -17,6 +24,7 @@
       android:hardwareAccelerated="true"
       android:allowBackup="true">
 
+    <!-- main app: ALERTS · CHAT · MAP · STATUS -->
     <activity
         android:name=".MainActivity"
         android:exported="true"
@@ -28,5 +36,36 @@
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
     </activity>
+
+    <!-- native connect screen (first launch / change server) -->
+    <activity
+        android:name=".ConnectActivity"
+        android:exported="false"
+        android:configChanges="orientation|screenSize|keyboardHidden"
+        android:windowSoftInputMode="adjustResize"/>
+
+    <!-- full-screen level-4 emergency alarm -->
+    <activity
+        android:name=".EmergencyActivity"
+        android:exported="false"
+        android:launchMode="singleInstance"
+        android:showWhenLocked="true"
+        android:turnScreenOn="true"
+        android:excludeFromRecents="true"/>
+
+    <!-- background alert polling + heads-up notifications -->
+    <service
+        android:name=".AlertService"
+        android:exported="false"
+        android:foregroundServiceType="dataSync"/>
+
+    <!-- resume alert polling after reboot -->
+    <receiver
+        android:name=".BootReceiver"
+        android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED"/>
+      </intent-filter>
+    </receiver>
   </application>
 </manifest>
