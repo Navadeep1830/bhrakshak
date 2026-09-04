@@ -70,3 +70,8 @@ upload/*.log
 /scripts/gen_test_photo.py
 /scripts/check-state.ts
 /scripts/ui-test.sh
+
+# android build intermediates (the APK itself in /apk/ IS committed)
+/android/build/
+*.idsig
+/android/tools/*.class

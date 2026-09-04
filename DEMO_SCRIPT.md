@@ -47,7 +47,12 @@ Press **Reset** afterwards to stand the district down.
 
 ## 4. Field phone app — the citizen side (90 s)
 
-Open **Field App** (header button; on a real phone it opens full-screen).
+**Install the real APK on a judge's phone** (`apk/BhuRakshakField-v1.0.apk` in the repo —
+allow "install unknown apps", it's a debug-signed build), then connect it to the laptop
+server: laptop runs `npm run dev`, phone on the same Wi-Fi/hotspot, APK asks for the
+server address once (`http://<laptop-ip>:3000`) and remembers it. From then on it IS the
+field app — same device identity the command center sees in Operations → Comms & SMS.
+(The in-website Field App view still works for big-screen demos.)
 
 1. **Manual location**: "Judges, I'm not in the North East right now — so I place myself there."
    Pin-edit button → tap the map (or place button → a district's worst zone). Position persists.
@@ -60,6 +65,9 @@ Open **Field App** (header button; on a real phone it opens full-screen).
    "saved to offline queue". Flip back online → **auto-sync** → AI pre-screens it
    (flagged, ~95%) → SMS dispatches to officials. Show the photo arriving in
    **Operations → Report inbox** (website) with the offline-sync badge.
+5. **The payoff**: trigger a cloudburst in the website **Simulation** tab → within seconds
+   the *judge's phone* buzzes with the alert and the SMS inbox fills — live device fan-out,
+   not a recording.
 
 ## 5. Risk Explorer — drill-down & factor percentages (60 s)
 
@@ -85,6 +93,7 @@ Open **Field App** (header button; on a real phone it opens full-screen).
 | "Where do the routes come from?" | A corridor-hazard engine over the live zone grid: 3 candidate corridors scored by cumulative ML hazard, then turn-by-turn steps synthesized from real geometry, named from the live road network. |
 | "What if there's no internet?" | Field app caches state; crack photos queue on-device and sync when the network returns. (Bluetooth mesh is the planned next layer for no-network valleys.) |
 | "Why is SMS simulated?" | The fan-out engine, templates, scoping and delivery states are real; the transport is a dry-run gateway that is the documented slot-in point for Twilio/BSNL credentials. |
+| "Is the APK a real app or a shortcut?" | A real installable Android client (repo: `android/`): a WebView shell that registers as a device and talks to the live engine — map, routes, photo reports, notifications. It connects to any BhuRakshak server over Wi-Fi; source + build script are in the repo. |
 | "How is this different from IMD alerts?" | We fuse zone-level susceptibility with rainfall intensity-duration thresholds and a calibrated probability prior, with anti-flapping hysteresis — village-level, not district-level, and per-road detours. |
 | "Model accuracy?" | Transparent by design: the I-D thresholds and prior are auditable (shown in the prediction card); the registry reports live telemetry instead of offline AUCs. |
 

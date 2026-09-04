@@ -8,9 +8,35 @@ One Next.js app contains both halves:
 | Surface | What it is |
 |---|---|
 | **Website Command Center** (`/`) | Map (satellite/terrain/street), district drill-down Risk Explorer, Operations (alerts, report inbox, roads, Comms & SMS), Analytics (live engine telemetry), **Simulation** tab (manual condition injection), Field Report |
-| **Field phone app** (Field App button, auto-opens on < 640 px) | Street map with hazard hexes + alternative safe routes (turn-by-turn), street view scan, offline crack-photo capture + auto-sync, notification + SMS inbox, manual location picker |
+| **Field phone app — APK** (`/mobile`) | Real installable Android app (`apk/BhuRakshakField-v1.0.apk`): street map with hazard hexes + alternative safe routes (turn-by-turn), street view scan, offline crack-photo capture + auto-sync, notification + SMS inbox, manual location picker |
+| **Field phone app — in browser** (Field App button, auto-opens on < 640 px) | Same app embedded in the website for big-screen demos |
 
 Everything runs on **zero external API keys** — Esri/OpenTopoMap/OpenStreetMap tiles, local SQLite, in-process engines.
+
+---
+
+## The Android APK (real app, not a shortcut)
+
+`apk/BhuRakshakField-v1.0.apk` — install it on any Android 7+ phone ("install unknown apps"
+must be allowed; it is debug-signed, which is normal for hackathon builds):
+
+1. Start the server on the command-center laptop: `npm run dev`
+2. Connect the phone to the **same Wi-Fi / hotspot**, find the laptop's IP
+   (`ipconfig` on Windows, `ip a` on Linux/Mac)
+3. Open **BhuRakshak Field** on the phone → enter `http://<laptop-ip>:3000` → **Connect**
+
+The app remembers the server and connects straight to it from then on. It registers
+as a **real device** (visible in Operations → Comms & SMS on the website), receives
+live alert fan-out (notifications + SMS inbox), plans routes, submits photo reports
+and queues them offline — all against the live engine.
+
+- The phone client loads the server's `/mobile` route — a standalone, login-free
+  surface (device auth, not website accounts).
+- Server down? The app shows a retry / change-server screen.
+- Want to rebuild or modify it? `android/` holds the full client source
+  (WebView shell, no dependencies) and `android/build.sh` rebuilds the APK with
+  plain SDK tools (no Gradle). Keystore `android/keystore.jks` (pass `bhrakshak`)
+  keeps signatures consistent — rotate it before any Play Store release.
 
 ---
 
@@ -81,7 +107,7 @@ Every other section reads live state. **Simulation is the only place conditions 
 
 ## Field app demo flow
 
-1. Open **Field App** (phone view). Map shows hex hazard zones, roads, detours.
+1. Install the APK (recommended — see above) or open **Field App** (phone view). Map shows hex hazard zones, roads, detours.
 2. **Set your position manually** — the pin-edit button (tap the map) or the place button (jump to a district's worst zone). Position persists across re-opens.
 3. **Plan alternative safe routes** — tap a destination or use *Shelters* → nearest relief camps. Three routes (fastest / safest / alternate bypass) with **turn-by-turn directions**, hazard warnings ("Caution — landslide risk zone ML-EKH-153 (L4) on the right"), blocked roads and ETAs.
 4. **Street view** — ground-level panorama scan of any hazard zone with driver bars.

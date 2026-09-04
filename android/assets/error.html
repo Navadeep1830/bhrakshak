@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BhuRakshak Field — Offline</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #070c14; color: #e2e8f0;
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 32px 24px;
+    text-align: center;
+  }
+  .icon { width: 64px; height: 64px; margin-bottom: 18px; }
+  h1 { font-size: 20px; font-weight: 800; }
+  .sub { color: #64748b; font-size: 13px; line-height: 1.6; margin: 8px 0 24px; max-width: 320px; }
+  code { color: #94a3b8; background: rgba(148,163,184,.12); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    border: none; border-radius: 10px; font-weight: 800; font-size: 15px;
+    padding: 13px 24px; min-width: 130px;
+  }
+  .primary { background: #10b981; color: #04140d; }
+  .primary:active { background: #059669; }
+  .ghost { background: rgba(148,163,184,.1); color: #e2e8f0; border: 1px solid rgba(148,163,184,.3); }
+</style>
+</head>
+<body>
+  <svg class="icon" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="16,2 29,9 29,23 16,30 3,23 3,9" fill="#ef4444" opacity=".85"/>
+    <polygon points="16,7 25,12 25,20 16,25 7,20 7,12" fill="#070c14"/>
+    <rect x="14.5" y="10" width="3" height="9" rx="1.5" fill="#ef4444"/>
+    <circle cx="16" cy="22" r="1.8" fill="#ef4444"/>
+  </svg>
+  <h1>Can't reach the BhuRakshak server</h1>
+  <div class="sub" id="sub">
+    Make sure the server is running (<code>npm run dev</code>) and the phone is
+    on the same Wi-Fi as the command-center laptop.
+  </div>
+  <div class="btns">
+    <button class="btn primary" onclick="retry()">Retry</button>
+    <button class="btn ghost" onclick="change()">Change server</button>
+  </div>
+
+<script>
+  var server = null;
+  try {
+    var m = location.search.match(/[?&]server=([^&]+)/);
+    if (m) server = decodeURIComponent(m[1]);
+  } catch (e) { }
+  if (server) {
+    document.getElementById('sub').innerHTML =
+      'Trying <code>' + server + '</code> — make sure the server is running ' +
+      '(<code>npm run dev</code>) and the phone is on the same Wi-Fi.';
+  }
+  function retry() {
+    location.href = (server || '') + '/mobile';
+  }
+  function change() {
+    location.href = 'file:///android_asset/start.html';
+  }
+</script>
+</body>
+</html>

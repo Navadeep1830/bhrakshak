@@ -22,7 +22,8 @@ import type { QueuedReport } from '@/lib/offline-store';
 
 interface Props {
   user: SessionUser;
-  onExit: () => void;
+  /** standalone (APK / /mobile) mode: omit to hide the back-to-website button */
+  onExit?: () => void;
 }
 
 const LS = {
@@ -356,11 +357,13 @@ export default function PhoneApp({ user, onExit }: Props) {
             {queue.length > 0 && (
               <Chip size="small" icon={<SyncIcon sx={{ fontSize: 12 }} />} label={queue.length} color="warning" sx={{ height: 22, fontWeight: 800, fontSize: 10 }} />
             )}
-            <Tooltip title="Back to website">
-              <IconButton size="small" onClick={onExit} sx={{ color: 'text.secondary' }}>
-                <DesktopWindowsIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            </Tooltip>
+            {onExit && (
+              <Tooltip title="Back to website">
+                <IconButton size="small" onClick={onExit} sx={{ color: 'text.secondary' }}>
+                  <DesktopWindowsIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+            )}
           </Toolbar>
         </AppBar>
 

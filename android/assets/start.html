@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BhuRakshak Field — Connect</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #070c14; color: #e2e8f0;
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 32px 24px;
+  }
+  .logo { width: 84px; height: 84px; margin-bottom: 20px; filter: drop-shadow(0 8px 24px rgba(16,185,129,.35)); }
+  h1 { font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
+  h1 em { color: #10b981; font-style: normal; }
+  .sub { color: #64748b; font-size: 13px; margin: 6px 0 28px; }
+  .card {
+    width: 100%; max-width: 380px; background: #0b1220;
+    border: 1px solid rgba(148,163,184,.18); border-radius: 14px; padding: 20px;
+  }
+  label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #94a3b8; }
+  .row { display: flex; gap: 10px; margin-top: 8px; }
+  input {
+    flex: 1; background: #070c14; border: 1px solid rgba(148,163,184,.28);
+    border-radius: 10px; color: #e2e8f0; font-size: 16px; padding: 13px 14px;
+    min-width: 0; outline: none;
+  }
+  input:focus { border-color: #10b981; }
+  button {
+    background: #10b981; color: #04140d; border: none; border-radius: 10px;
+    font-weight: 800; font-size: 15px; padding: 13px 22px; flex-shrink: 0;
+  }
+  button:active { background: #059669; }
+  .hint { color: #64748b; font-size: 12.5px; line-height: 1.65; margin-top: 16px; }
+  .hint b { color: #94a3b8; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; margin-right: 6px; }
+  .err { color: #f87171; font-size: 12.5px; margin-top: 10px; display: none; }
+</style>
+</head>
+<body>
+  <svg class="logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="16,2 29,9 29,23 16,30 3,23 3,9" fill="#10b981"/>
+    <polygon points="16,7 25,12 25,20 16,25 7,20 7,12" fill="#070c14"/>
+    <polygon points="16,11 21,19.5 11,19.5" fill="#10b981"/>
+  </svg>
+  <h1>BhuRakshak <em>Field</em></h1>
+  <div class="sub">Landslide early-warning · field client</div>
+
+  <div class="card">
+    <label for="url">BhuRakshak server address</label>
+    <div class="row">
+      <input id="url" type="url" inputmode="url" autocapitalize="off" autocorrect="off"
+             spellcheck="false" placeholder="http://192.168.1.5:3000" />
+      <button onclick="connect()">Connect</button>
+    </div>
+    <div class="err" id="err">Enter a valid address, e.g. http://192.168.1.5:3000</div>
+    <div class="hint">
+      <span class="dot"></span>Start the server on the command-center laptop
+      (<b>npm run dev</b>) and enter its Wi-Fi address here — phone and laptop
+      must be on the <b>same Wi-Fi / hotspot</b>.<br><br>
+      Find the laptop's IP with <b>ipconfig</b> (Windows) or <b>ip a</b> (Linux/Mac).
+    </div>
+  </div>
+
+<script>
+  function normalize(raw) {
+    var v = (raw || '').trim();
+    if (!v) return null;
+    v = v.replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(v)) v = 'http://' + v;
+    try { var u = new URL(v); if (!u.hostname) return null; } catch (e) { return null; }
+    return v;
+  }
+  function connect() {
+    var el = document.getElementById('err');
+    var url = normalize(document.getElementById('url').value);
+    if (!url) { el.style.display = 'block'; return; }
+    el.style.display = 'none';
+    location.href = url + '/mobile';
+  }
+  document.getElementById('url').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') connect();
+  });
+</script>
+</body>
+</html>
