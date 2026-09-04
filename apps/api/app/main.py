@@ -70,18 +70,28 @@ from pathlib import Path
 
 from fastapi.responses import FileResponse, JSONResponse
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+def _find_repo_apk() -> Path | None:
+    """Locate bhrakshak-field-latest.apk by walking up from this file.
+
+    The old parents[3] hardcode assumed the dev's checkout depth and raised
+    IndexError at import time inside the API container (/srv/app/main.py has
+    fewer parents), taking the whole service down. Walking up until a marker
+    is found works from any layout — container, venv install, or repo.
+    """
+    here = Path(__file__).resolve()
+    for parent in [here, *here.parents]:
+        candidate = parent / "bhrakshak-field-latest.apk"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 @app.get("/download/apk", tags=["ops"])
 async def download_apk():
-    """Serve the field-team Android APK from the repo root.
-
-    Previously this pointed at a developer's absolute home path and 500'd on
-    every other machine. Resolved relative to the package instead.
-    """
-    apk_path = _REPO_ROOT / "bhrakshak-field-latest.apk"
-    if not apk_path.exists():
+    """Serve the field-team Android APK from the repo root."""
+    apk_path = _find_repo_apk()
+    if apk_path is None:
         return JSONResponse(
             {"detail": "APK not found in repo root"}, status_code=404
         )
