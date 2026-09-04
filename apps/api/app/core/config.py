@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     fixture_mode: bool = False
 
     database_url: str = "postgresql+asyncpg://bhrakshak:bhrakshak@localhost:5433/bhrakshak"
-    redis_url: str = "redis://localhost:6600/0" # host port mapped in docker-compose (6380 collides with Hyper-V reservations on some Windows hosts)
+    redis_url: str = "redis://localhost:6380/0"  # host port mapped in docker-compose
 
     mqtt_host: str = "localhost"
     mqtt_port: int = 1883

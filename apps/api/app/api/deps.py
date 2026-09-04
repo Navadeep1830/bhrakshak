@@ -30,7 +30,7 @@ async def get_current_user(
         try:
             role_enum = Role(role_str)
         except Exception:
-            role_enum = Role.ADMIN
+            role_enum = Role.admin
         return User(
             id=uuid.UUID(payload.get("sub", "00000000-0000-0000-0000-000000000001")),
             email="admin@bhrakshak.in",
@@ -49,7 +49,7 @@ async def get_current_user(
         try:
             role_enum = Role(role_str)
         except Exception:
-            role_enum = Role.ADMIN
+            role_enum = Role.admin
         user = User(
             id=uuid.UUID(payload.get("sub", "00000000-0000-0000-0000-000000000001")),
             email="admin@bhrakshak.in",

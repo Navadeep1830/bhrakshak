@@ -33,8 +33,17 @@ separate server, same JWT auth, same offline-first sync contract.
 
 ## Pre-built APK
 
-The latest assembled debug APK is saved at:
-`/home/sudpy/Downloads/bhrakshak-field-latest.apk`
+The latest assembled debug APK is committed at the repo root and at `apps/android/`:
+
+```
+bhrakshak-field-latest.apk
+apps/android/bhrakshak-field-latest.apk
+```
+
+You can also download it directly from a running API via `GET /download/apk`
+(the endpoint serves the repo-root copy with the correct Android MIME type).
+
+For a fresh build from source see the **Build** section below.
 
 ## Build
 
