@@ -182,6 +182,36 @@ model Device {
   createdAt  DateTime @default(now())
 
   smsMessages SmsMessage[]
+  messages    FieldMessage[]
+}
+
+// Field messages — two-way comms between the field app and the command
+// center (website). Devices send SOS / help / status / info / gauge reports;
+// command replies (authorRole 'command') arrive back on the phone.
+model FieldMessage {
+  id         String   @id @default(cuid())
+  deviceId   String?  // sender device (field app); null when sent from the website
+  device     Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  authorName String
+  authorRole String   @default("field") // field | command
+  district   String?
+  category   String   @default("info")  // sos | help | status | info | gauge
+  body       String
+  priority   Int      @default(0)       // 0 normal · 1 urgent (SOS / gauge alert)
+  lat        Float?
+  lon        Float?
+  zoneCode   String?
+  replyToId  String?
+  replyTo    FieldMessage?  @relation("Thread", fields: [replyToId], references: [id], onDelete: Cascade)
+  replies    FieldMessage[] @relation("Thread")
+  handled    Boolean  @default(false)
+  handledAt  DateTime?
+  handledBy  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([deviceId])
+  @@index([replyToId])
 }
 
 // Fan-out notification events (in-app notification center)
@@ -261,11 +291,13 @@ model SensorReading {
 }
 
 model SafeCheckin {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lat       Float
-  lon       Float
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId   String?  // field-app device that checked in (no website login needed)
+  authorName String?  // display name for device check-ins
+  lat        Float
+  lon        Float
   zoneCode  String?
   message   String?
   createdAt DateTime @default(now())

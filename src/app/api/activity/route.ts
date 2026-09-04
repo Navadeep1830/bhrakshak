@@ -5,7 +5,7 @@ import { requireSession } from '@/lib/auth';
 
 interface FeedItem {
   id: string;
-  kind: 'report' | 'alert' | 'sms' | 'checkin';
+  kind: 'report' | 'alert' | 'sms' | 'checkin' | 'message';
   ts: string;
   title: string;
   detail: string;
@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest) {
     await requireSession();
 
     const since = new Date(Date.now() - 48 * 3600_000);
-    const [reports, alerts, sms, checkins] = await Promise.all([
+    const [reports, alerts, sms, checkins, messages] = await Promise.all([
       db.citizenReport.findMany({
         where: { createdAt: { gte: since } },
         orderBy: { createdAt: 'desc' },
@@ -37,6 +37,7 @@ export async function GET(_req: NextRequest) {
       db.alert.findMany({ where: { createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, take: 30, include: { zone: { select: { zoneCode: true, district: true } } } }),
       db.smsMessage.findMany({ where: { queuedAt: { gte: since } }, orderBy: { queuedAt: 'desc' }, take: 30 }),
       db.safeCheckin.findMany({ where: { createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, take: 15, include: { user: { select: { fullName: true } } } }),
+      db.fieldMessage.findMany({ where: { createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, take: 30 }),
     ]);
 
     const items: FeedItem[] = [];
@@ -81,9 +82,28 @@ export async function GET(_req: NextRequest) {
         id: `chk-${c.id}`,
         kind: 'checkin',
         ts: c.createdAt.toISOString(),
-        title: `Safe check-in — ${c.user?.fullName ?? 'field staff'}`,
+        title: `Safe check-in — ${c.authorName ?? c.user?.fullName ?? 'field staff'}`,
         detail: c.message?.slice(0, 120) ?? `${c.zoneCode ?? 'field'} · ${c.lat.toFixed(3)}, ${c.lon.toFixed(3)}`,
         zoneCode: c.zoneCode ?? null,
+      });
+    }
+    for (const m of messages) {
+      items.push({
+        id: `msg-${m.id}`,
+        kind: 'message',
+        ts: m.createdAt.toISOString(),
+        title:
+          m.authorRole === 'command'
+            ? `Command reply → ${m.authorName}`
+            : m.category === 'sos'
+              ? `SOS — ${m.authorName}`
+              : m.category === 'gauge'
+                ? `Rain gauge — ${m.authorName}`
+                : `Field message — ${m.authorName}`,
+        detail: m.body.slice(0, 120),
+        zoneCode: m.zoneCode ?? null,
+        district: m.district ?? null,
+        level: m.priority > 0 ? 3 : undefined,
       });
     }
 

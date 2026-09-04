@@ -11,12 +11,22 @@ export async function GET() {
       zones = await db.zone.count();
     } catch { /* instrumentation reports the setup hint */ }
   }
-  return NextResponse.json({
-    status: 'ok',
-    engine: 'bhrakshak-v3',
-    zones,
-    time: new Date().toISOString(),
-  });
+  return NextResponse.json(
+    {
+      status: 'ok',
+      engine: 'bhrakshak-v3',
+      zones,
+      time: new Date().toISOString(),
+    },
+    {
+      // CORS: lets the Android app's connect screen (a local asset page)
+      // probe this endpoint before switching the WebView to /mobile.
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET',
+      },
+    },
+  );
 }
 
 export const dynamic = 'force-dynamic';

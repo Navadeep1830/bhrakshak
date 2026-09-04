@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Box, LinearProgress, Typography } from '@mui/material';
 import PhoneApp from '@/components/app/PhoneApp';
 import type { SessionUser } from '@/components/login-gate';
@@ -26,16 +26,15 @@ const DEFAULT_PROFILE: SessionUser = {
 };
 
 export default function MobilePage() {
-  const [profile, setProfile] = useState<SessionUser | null>(null);
-
-  useEffect(() => {
+  // read once on first render (client component — localStorage is available)
+  const [profile] = useState<SessionUser | null>(() => {
     try {
       const raw = localStorage.getItem(PROFILE_KEY);
-      setProfile(raw ? { ...DEFAULT_PROFILE, ...JSON.parse(raw) } : DEFAULT_PROFILE);
+      return raw ? { ...DEFAULT_PROFILE, ...JSON.parse(raw) } : DEFAULT_PROFILE;
     } catch {
-      setProfile(DEFAULT_PROFILE);
+      return DEFAULT_PROFILE;
     }
-  }, []);
+  });
 
   if (!profile) {
     return (

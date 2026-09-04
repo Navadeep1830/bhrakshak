@@ -107,6 +107,52 @@ chk "engineLive present" '"engineLive"' "$R"
 chk "registry live" '"registry"' "$R"
 chk "recentRuns present" '"recentRuns"' "$R"
 
+echo "── 19. field messaging: device → command inbox"
+R=$(curl -s -m 30 -X POST $BASE/api/app/message -H 'Content-Type: application/json' -H 'x-device-id: test-phone-01' -d '{"category":"sos","body":"E2E: road fully blocked at NH-6 km 42, need NDRF","lat":24.85,"lon":93.35}')
+chk "message send ok" '"ok":true' "$R"
+chk "message zone attributed" '"zoneCode":"MN-NON' "$R"
+MSG_ID=$(echo "$R" | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+
+echo "── 20. website inbox sees it"
+R=$(curl -s -m 30 -b $J $BASE/api/messages)
+chk "inbox lists message" "E2E: road fully blocked" "$R"
+chk "inbox counts" '"open":' "$R"
+
+echo "── 21. command reply"
+R=$(curl -s -m 30 -b $J -X POST $BASE/api/messages -H 'Content-Type: application/json' -d "{\"replyToId\":\"$MSG_ID\",\"body\":\"E2E reply: NDRF dispatched, ETA 30 min\"}")
+chk "reply ok" '"ok":true' "$R"
+
+echo "── 22. device thread sees the reply"
+R=$(curl -s -m 30 $BASE/api/app/messages -H 'x-device-id: test-phone-01')
+chk "thread has reply" "E2E reply: NDRF dispatched" "$R"
+chk "thread has own sos" '"category":"sos"' "$R"
+
+echo "── 23. mark handled"
+R=$(curl -s -m 30 -b $J -X PATCH $BASE/api/messages/$MSG_ID -H 'Content-Type: application/json' -d '{"handled":true}')
+chk "handled ok" '"handled":true' "$R"
+
+echo "── 24. I'M SAFE check-in (device auth, no website login)"
+R=$(curl -s -m 30 -X POST $BASE/api/app/checkin -H 'Content-Type: application/json' -H 'x-device-id: test-phone-01' -d '{"lat":24.85,"lon":93.35,"message":"E2E: all families at Tupul camp"}')
+chk "checkin ok" '"ok":true' "$R"
+chk "checkin zone" '"zoneCode":"MN-NON' "$R"
+
+echo "── 25. field rain gauge → real engine pass"
+R=$(curl -s -m 120 -X POST $BASE/api/app/gauge -H 'Content-Type: application/json' -H 'x-device-id: test-phone-01' -d '{"lat":25.28,"lon":91.52,"rain1h":55,"rain24h":210,"soilMoisture":85}')
+chk "gauge ok" '"ok":true' "$R"
+chk "gauge engine report" '"maxLevel"' "$R"
+
+echo "── 26. offline sync carries queued messages"
+R=$(curl -s -m 60 -X POST $BASE/api/app/sync -H 'Content-Type: application/json' -H 'x-device-id: test-phone-01' -d '{"deviceId":"test-phone-01","messages":[{"clientCreatedAt":"2026-09-04T10:00:00.000Z","category":"help","body":"E2E offline queued: need tarpaulins at camp"}]}')
+chk "sync messages ok" '"ok":true' "$R"
+chk "synced count" '"messagesSynced":1' "$R"
+
+echo "── 27. activity feed includes messages"
+R=$(curl -s -m 30 -b $J $BASE/api/activity)
+chk "activity has message" '"kind":"message"' "$R"
+
+echo "── 28. health CORS (APK connect screen)"
+R=$(curl -s -m 10 -D - -o /dev/null $BASE/api/health | grep -i 'access-control-allow-origin')
+chk "health CORS header" 'access-control-allow-origin' "$(echo "$R" | tr 'A-Z' 'a-z')"
 
 echo ""
 echo "RESULT: $PASS passed, $FAIL failed"

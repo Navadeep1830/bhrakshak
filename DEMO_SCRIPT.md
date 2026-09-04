@@ -65,7 +65,16 @@ field app — same device identity the command center sees in Operations → Com
    "saved to offline queue". Flip back online → **auto-sync** → AI pre-screens it
    (flagged, ~95%) → SMS dispatches to officials. Show the photo arriving in
    **Operations → Report inbox** (website) with the offline-sync badge.
-5. **The payoff**: trigger a cloudburst in the website **Simulation** tab → within seconds
+5. **Comms — two-way messaging with command**: Comms tab → send an **SOS**
+   ("slope failure, 6 families trapped") → it's in the website's **Operations → Field
+   messages** inbox within seconds (SOS badge in the tab) → reply from the laptop →
+   the reply lands on the phone's thread. Perfect proof the app talks to the dashboard
+   in both directions.
+6. **I'M SAFE + rain gauge (manual data upload)**: tap **I'M SAFE** — command sees the
+   check-in live. Then the rain-gauge card: type the field official's real numbers
+   (62 mm/1h) → **the production risk engine runs on them** — zones escalate, alerts
+   fire, SMS dispatch. "The model isn't hardcoded — here are my numbers, watch it react."
+7. **The payoff**: trigger a cloudburst in the website **Simulation** tab → within seconds
    the *judge's phone* buzzes with the alert and the SMS inbox fills — live device fan-out,
    not a recording.
 
@@ -93,6 +102,7 @@ field app — same device identity the command center sees in Operations → Com
 | "Where do the routes come from?" | A corridor-hazard engine over the live zone grid: 3 candidate corridors scored by cumulative ML hazard, then turn-by-turn steps synthesized from real geometry, named from the live road network. |
 | "What if there's no internet?" | Field app caches state; crack photos queue on-device and sync when the network returns. (Bluetooth mesh is the planned next layer for no-network valleys.) |
 | "Why is SMS simulated?" | The fan-out engine, templates, scoping and delivery states are real; the transport is a dry-run gateway that is the documented slot-in point for Twilio/BSNL credentials. |
+| "Does the app actually talk to the dashboard?" | Yes, both ways: SOS/help/status messages from the phone land in Operations → Field messages; command replies appear on the phone within seconds (10 s poll). Plus I'M SAFE check-ins, gauge readings that run the engine, and full alert/SMS fan-out to the device. |
 | "Is the APK a real app or a shortcut?" | A real installable Android client (repo: `android/`): a WebView shell that registers as a device and talks to the live engine — map, routes, photo reports, notifications. It connects to any BhuRakshak server over Wi-Fi; source + build script are in the repo. |
 | "How is this different from IMD alerts?" | We fuse zone-level susceptibility with rainfall intensity-duration thresholds and a calibrated probability prior, with anti-flapping hysteresis — village-level, not district-level, and per-road detours. |
 | "Model accuracy?" | Transparent by design: the I-D thresholds and prior are auditable (shown in the prediction card); the registry reports live telemetry instead of offline AUCs. |

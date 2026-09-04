@@ -8,7 +8,7 @@ One Next.js app contains both halves:
 | Surface | What it is |
 |---|---|
 | **Website Command Center** (`/`) | Map (satellite/terrain/street), district drill-down Risk Explorer, Operations (alerts, report inbox, roads, Comms & SMS), Analytics (live engine telemetry), **Simulation** tab (manual condition injection), Field Report |
-| **Field phone app — APK** (`/mobile`) | Real installable Android app (`apk/BhuRakshakField-v1.0.apk`): street map with hazard hexes + alternative safe routes (turn-by-turn), street view scan, offline crack-photo capture + auto-sync, notification + SMS inbox, manual location picker |
+| **Field phone app — APK** (`/mobile`) | Real installable Android app (`apk/BhuRakshakField-v1.0.apk`): street map with hazard hexes + alternative safe routes (turn-by-turn), street view scan, offline crack-photo capture + auto-sync, notification + SMS inbox, manual location picker, **Comms tab — two-way messaging with the command centre (SOS/help/status), I'M SAFE check-in, rain-gauge reading that runs the live risk engine** |
 | **Field phone app — in browser** (Field App button, auto-opens on < 640 px) | Same app embedded in the website for big-screen demos |
 
 Everything runs on **zero external API keys** — Esri/OpenTopoMap/OpenStreetMap tiles, local SQLite, in-process engines.
@@ -25,10 +25,20 @@ must be allowed; it is debug-signed, which is normal for hackathon builds):
    (`ipconfig` on Windows, `ip a` on Linux/Mac)
 3. Open **BhuRakshak Field** on the phone → enter `http://<laptop-ip>:3000` → **Connect**
 
-The app remembers the server and connects straight to it from then on. It registers
-as a **real device** (visible in Operations → Comms & SMS on the website), receives
-live alert fan-out (notifications + SMS inbox), plans routes, submits photo reports
-and queues them offline — all against the live engine.
+The app remembers the server and connects straight to it from then on. The connect
+screen actually **tests the connection** first (health ping with a clear error if the
+server is unreachable) — no more guessing. It registers as a **real device** (visible
+in Operations → Comms & SMS on the website), receives live alert fan-out
+(notifications + SMS inbox), plans routes, submits photo reports and queues them
+offline, and **messages the command centre** — all against the live engine.
+
+**Can't connect? (checklist)**
+1. `npm run dev` prints two addresses — use the **Network** one (`http://<ip>:3000`), not localhost.
+   (The dev server binds `0.0.0.0`, so it IS reachable from the phone — that's the default now.)
+2. Phone and laptop on the **same Wi-Fi/hotspot**.
+3. **Windows firewall**: allow Node.js for private networks (Windows asks on first run — tick "Private networks").
+4. Find the laptop IP: `ipconfig` (Windows) / `ip a` (Linux). Don't type `127.0.0.1` — that's the phone itself (the app warns you).
+5. Venue Wi-Fi blocking device-to-device traffic? Use the **laptop's phone hotspot** instead — most reliable.
 
 - The phone client loads the server's `/mobile` route — a standalone, login-free
   surface (device auth, not website accounts).
@@ -112,6 +122,11 @@ Every other section reads live state. **Simulation is the only place conditions 
 3. **Plan alternative safe routes** — tap a destination or use *Shelters* → nearest relief camps. Three routes (fastest / safest / alternate bypass) with **turn-by-turn directions**, hazard warnings ("Caution — landslide risk zone ML-EKH-153 (L4) on the right"), blocked roads and ETAs.
 4. **Street view** — ground-level panorama scan of any hazard zone with driver bars.
 5. **Report** — take a crack photo (AI pre-screens it), or flip **Simulate offline** in Sync and capture offline → watch the queue auto-sync when back online.
+6. **Comms — the two-way link**: send an **SOS** (priority) or status message → it appears in the
+   website's **Operations → Field messages** inbox within seconds → reply from the website → the
+   reply lands back on the phone. Also: **I'M SAFE** check-in (command sees it live) and a
+   **rain-gauge reading** — type real mm numbers, the production risk engine runs on them
+   (zones escalate, alerts + SMS fire) — the manual-data-upload proof for judges.
 6. **Alerts** — live notifications + SMS inbox (with delivery states).
 
 ---

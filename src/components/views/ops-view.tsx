@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   Box, Typography, Stack, Chip, Paper, Tabs, Tab, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, IconButton, Tooltip, Button, Snackbar, Alert, Select, MenuItem,
-  LinearProgress, ToggleButtonGroup, ToggleButton,
+  LinearProgress, ToggleButtonGroup, ToggleButton, TextField,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
 import BlockIcon from '@mui/icons-material/Block';
@@ -30,6 +30,21 @@ interface ReportRow {
   createdAt: string; verifiedAt: string | null;
   zone: { zoneCode: string; name: string; district: string } | null;
   submitter: { fullName: string; role: string } | null;
+}
+
+interface FieldMessageRow {
+  id: string; deviceId: string | null; authorName: string; authorRole: string;
+  deviceName: string | null; devicePhone: string | null; deviceOnline: boolean;
+  district: string | null; category: string; body: string; priority: number;
+  lat: number | null; lon: number | null; zoneCode: string | null;
+  handled: boolean; handledAt: string | null; createdAt: string;
+  replies: Array<{ id: string; authorName: string; authorRole: string; body: string; createdAt: string }>;
+}
+
+interface MessagesData {
+  messages: FieldMessageRow[];
+  open: number;
+  sos: number;
 }
 
 interface CommsData {
@@ -94,6 +109,45 @@ export default function OpsView({
     queryFn: async () => (await fetch('/api/comms')).json(),
     refetchInterval: 5_000,
   });
+  const messagesQ = useQuery<MessagesData>({
+    queryKey: ['ops-messages'],
+    queryFn: async () => (await fetch('/api/messages')).json(),
+    refetchInterval: 5_000,
+  });
+
+  const replyMutation = useMutation({
+    mutationFn: async ({ replyToId, body }: { replyToId: string; body: string }) => {
+      const res = await fetch('/api/messages', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replyToId, body }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Reply failed');
+      return res.json();
+    },
+    onSuccess: () => {
+      setToast({ msg: 'Reply sent — visible on the field phone now', sev: 'success' });
+      qc.invalidateQueries({ queryKey: ['ops-messages'] });
+      qc.invalidateQueries({ queryKey: ['kpis'] });
+    },
+    onError: (e: Error) => setToast({ msg: e.message, sev: 'error' }),
+  });
+
+  const handleMutation = useMutation({
+    mutationFn: async ({ id, handled }: { id: string; handled: boolean }) => {
+      const res = await fetch(`/api/messages/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handled }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Update failed');
+      return res.json();
+    },
+    onSuccess: (_d, v) => {
+      setToast({ msg: v.handled ? 'Message marked handled' : 'Message reopened', sev: 'success' });
+      qc.invalidateQueries({ queryKey: ['ops-messages'] });
+      qc.invalidateQueries({ queryKey: ['kpis'] });
+    },
+    onError: (e: Error) => setToast({ msg: e.message, sev: 'error' }),
+  });
 
   const ackMutation = useMutation({
     mutationFn: async (alertId: string) => {
@@ -155,6 +209,20 @@ export default function OpsView({
         />
         <Tab
           label={`Report inbox${pendingReports.length ? ` (${pendingReports.length})` : ''}`}
+          sx={{ minHeight: 44, fontSize: 13, fontWeight: 600 }}
+        />
+        <Tab
+          label={
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Field messages
+              {(messagesQ.data?.sos ?? 0) > 0 && (
+                <Chip size="small" label={`${messagesQ.data?.sos} SOS`} color="error" sx={{ height: 17, fontSize: 9, fontWeight: 800 }} />
+              )}
+              {(messagesQ.data?.open ?? 0) > 0 && (
+                <Chip size="small" label={`${messagesQ.data?.open} open`} color="warning" sx={{ height: 17, fontSize: 9, fontWeight: 800 }} />
+              )}
+            </span>
+          }
           sx={{ minHeight: 44, fontSize: 13, fontWeight: 600 }}
         />
         <Tab label="Road network" sx={{ minHeight: 44, fontSize: 13, fontWeight: 600 }} />
@@ -395,6 +463,48 @@ export default function OpsView({
       )}
 
       {tab === 2 && (
+        <Box>
+          {messagesQ.isLoading ? (
+            <LinearProgress sx={{ mb: 2 }} />
+          ) : (
+            <Stack spacing={1.5}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, flex: 1 }}>
+                  Field → command messages
+                  <Typography component="span" variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
+                    live from the phone app — SOS, help, status, gauge readings · replies land on the phone
+                  </Typography>
+                </Typography>
+                <Chip size="small" label={`${messagesQ.data?.open ?? 0} open`} color={messagesQ.data?.open ? 'warning' : 'default'} sx={{ height: 20, fontWeight: 800 }} />
+                <Chip size="small" label={`${messagesQ.data?.sos ?? 0} SOS`} color={messagesQ.data?.sos ? 'error' : 'default'} sx={{ height: 20, fontWeight: 800 }} />
+              </Stack>
+
+              {(messagesQ.data?.messages ?? []).length === 0 && (
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    No field messages yet. Send one from the phone app (Comms tab) — it appears here
+                    within seconds; reply and the phone sees it instantly.
+                  </Typography>
+                </Paper>
+              )}
+
+              {(messagesQ.data?.messages ?? []).map((m) => (
+                <FieldMessageCard
+                  key={m.id}
+                  m={m}
+                  canReply={canVerify}
+                  onReply={(body) => replyMutation.mutate({ replyToId: m.id, body })}
+                  onHandle={(handled) => handleMutation.mutate({ id: m.id, handled })}
+                  onZoneSelect={onZoneSelect}
+                  replyBusy={replyMutation.isPending}
+                />
+              ))}
+            </Stack>
+          )}
+        </Box>
+      )}
+
+      {tab === 3 && (
         <Stack spacing={1.5}>
           {(roadsQ.data?.roads ?? []).map((r) => {
             const d = r.detour;
@@ -465,7 +575,7 @@ export default function OpsView({
         </Stack>
       )}
 
-      {tab === 3 && (
+      {tab === 4 && (
         <Stack spacing={1.5}>
           {/* stats */}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
@@ -642,5 +752,139 @@ export default function OpsView({
         </Alert>
       </Snackbar>
     </Box>
+  );
+}
+
+/* ── Field messages inbox card ─────────────────────────────────────────── */
+
+const MSG_META: Record<string, { label: string; color: string }> = {
+  sos: { label: 'SOS', color: '#ef4444' },
+  help: { label: 'HELP', color: '#f59e0b' },
+  status: { label: 'STATUS', color: '#38bdf8' },
+  info: { label: 'INFO', color: '#94a3b8' },
+  gauge: { label: 'GAUGE', color: '#a78bfa' },
+};
+
+function FieldMessageCard({
+  m, canReply, onReply, onHandle, onZoneSelect, replyBusy,
+}: {
+  m: FieldMessageRow;
+  canReply: boolean;
+  onReply: (body: string) => void;
+  onHandle: (handled: boolean) => void;
+  onZoneSelect: (zoneCode: string) => void;
+  replyBusy: boolean;
+}) {
+  const [reply, setReply] = useState('');
+  const [open, setOpen] = useState(false);
+  const meta = MSG_META[m.category] ?? MSG_META.info;
+  const urgent = m.category === 'sos' && !m.handled;
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        borderLeft: `3px solid ${meta.color}`,
+        borderColor: urgent ? 'rgba(239,68,68,.55)' : undefined,
+        bgcolor: urgent ? 'rgba(239,68,68,.04)' : undefined,
+      }}
+    >
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.75, flexWrap: 'wrap', gap: 0.75 }}>
+        <Chip
+          size="small"
+          label={meta.label}
+          sx={{ height: 20, fontWeight: 800, fontSize: 10, bgcolor: `${meta.color}1f`, color: meta.color, border: `1px solid ${meta.color}55` }}
+        />
+        <Typography variant="body2" sx={{ fontWeight: 800 }}>
+          {m.authorName}
+          {m.deviceName && m.deviceName !== m.authorName && (
+            <Typography component="span" variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+              {' '}· {m.deviceName}
+            </Typography>
+          )}
+        </Typography>
+        {m.deviceOnline && (
+          <Chip size="small" label="phone online" sx={{ height: 18, fontSize: 9, fontWeight: 700, bgcolor: 'rgba(52,211,153,.1)', color: '#34d399', border: '1px solid rgba(52,211,153,.3)' }} />
+        )}
+        {m.district && <Chip size="small" label={m.district} variant="outlined" sx={{ height: 18, fontSize: 9, fontWeight: 700 }} />}
+        {m.zoneCode && (
+          <Chip
+            size="small" label={m.zoneCode} onClick={() => onZoneSelect(m.zoneCode!)}
+            sx={{ height: 18, fontSize: 9, fontWeight: 800, cursor: 'pointer', bgcolor: 'rgba(148,163,184,.12)' }}
+          />
+        )}
+        <Box sx={{ flex: 1 }} />
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10 }}>
+          {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Typography>
+        {m.handled ? (
+          <Chip size="small" icon={<DoneAllIcon sx={{ fontSize: 12 }} />} label="handled" sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: 'rgba(52,211,153,.1)', color: '#34d399' }} />
+        ) : (
+          <Chip size="small" label="open" color="warning" sx={{ height: 20, fontSize: 10, fontWeight: 800 }} />
+        )}
+      </Stack>
+
+      <Typography variant="body2" sx={{ mb: 1, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+        {m.body}
+      </Typography>
+
+      {m.replies.length > 0 && (
+        <Stack spacing={0.75} sx={{ mb: 1, pl: 1.5, borderLeft: '2px solid rgba(52,211,153,.3)' }}>
+          {m.replies.map((r) => (
+            <Box key={r.id}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: '#34d399' }}>
+                {r.authorName} · command{' '}
+                <Typography component="span" variant="caption" sx={{ color: 'text.secondary', fontSize: 9.5 }}>
+                  {new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Typography>
+              </Typography>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{r.body}</Typography>
+            </Box>
+          ))}
+        </Stack>
+      )}
+
+      {canReply && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          {open ? (
+            <>
+              <TextField
+                size="small" autoFocus placeholder="Reply to the field phone…"
+                value={reply} onChange={(e) => setReply(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && reply.trim() && !replyBusy) {
+                    onReply(reply.trim());
+                    setReply('');
+                    setOpen(false);
+                  }
+                }}
+                sx={{ flex: 1, '& .MuiInput-root': { fontSize: 13 } }}
+              />
+              <Button
+                size="small" variant="contained" disabled={!reply.trim() || replyBusy}
+                onClick={() => { onReply(reply.trim()); setReply(''); setOpen(false); }}
+              >
+                Send
+              </Button>
+              <Button size="small" onClick={() => setOpen(false)}>Cancel</Button>
+            </>
+          ) : (
+            <>
+              <Button size="small" startIcon={<SmsIcon sx={{ fontSize: 14 }} />} onClick={() => setOpen(true)}>
+                Reply
+              </Button>
+              {m.handled ? (
+                <Button size="small" onClick={() => onHandle(false)}>Reopen</Button>
+              ) : (
+                <Button size="small" color="success" startIcon={<CheckIcon sx={{ fontSize: 14 }} />} onClick={() => onHandle(true)}>
+                  Mark handled
+                </Button>
+              )}
+            </>
+          )}
+        </Stack>
+      )}
+    </Paper>
   );
 }

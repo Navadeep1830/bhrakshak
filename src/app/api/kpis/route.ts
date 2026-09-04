@@ -38,9 +38,11 @@ export async function GET() {
       if (!recentSensorSet.has(s.zoneId)) recentSensorSet.add(s.zoneId);
     }
 
-    const [sms24h, devicesOnline] = await Promise.all([
+    const [sms24h, devicesOnline, fieldMessagesNew, sosOpen] = await Promise.all([
       db.smsMessage.count({ where: { queuedAt: { gte: new Date(Date.now() - 86400_000) } } }),
       db.device.count({ where: { lastSeenAt: { gte: new Date(Date.now() - 70_000) } } }),
+      db.fieldMessage.count({ where: { authorRole: 'field', handled: false, replyToId: null } }),
+      db.fieldMessage.count({ where: { authorRole: 'field', category: 'sos', handled: false, replyToId: null } }),
     ]);
 
     return NextResponse.json({
@@ -57,6 +59,8 @@ export async function GET() {
       detoursActive,
       checkins24h: checkins,
       smsSent24h: sms24h,
+      fieldMessagesNew,
+      sosOpen,
       devicesOnline,
       districts: [...new Set(zones.map((z) => z.district))].length,
       updatedAt: new Date().toISOString(),

@@ -35,7 +35,7 @@ interface Kpis {
   zonesTotal: number; populationMonitored: number; populationAtRiskL3: number;
   populationExposedL2: number; activeAlerts: number; l3plusZones: number;
   pendingReports: number; verifiedReports: number; sensorsOnline: number;
-  roadsBlocked: number; detoursActive: number; checkins24h: number; smsSent24h: number; districts: number; updatedAt: string;
+  roadsBlocked: number; detoursActive: number; checkins24h: number; smsSent24h: number; fieldMessagesNew: number; sosOpen: number; districts: number; updatedAt: string;
 }
 
 interface AlertRow {
@@ -284,6 +284,7 @@ export default function Home() {
             <KpiStat label="Roads blocked" value={kpiQ.data?.roadsBlocked ?? 0} tone="#f97316" />
             <KpiStat label="Alt. routes live" value={kpiQ.data?.detoursActive ?? 0} tone="#38bdf8" />
             <KpiStat label="SMS 24h" value={kpiQ.data?.smsSent24h ?? 0} tone="#34d399" />
+            <KpiStat label="Field msgs" value={kpiQ.data?.fieldMessagesNew ?? 0} tone={(kpiQ.data?.sosOpen ?? 0) > 0 ? '#ef4444' : '#f59e0b'} />
           </Stack>
 
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>

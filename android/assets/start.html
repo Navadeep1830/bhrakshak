@@ -33,10 +33,20 @@
     font-weight: 800; font-size: 15px; padding: 13px 22px; flex-shrink: 0;
   }
   button:active { background: #059669; }
+  button:disabled { opacity: .6; }
   .hint { color: #64748b; font-size: 12.5px; line-height: 1.65; margin-top: 16px; }
   .hint b { color: #94a3b8; }
   .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; margin-right: 6px; }
-  .err { color: #f87171; font-size: 12.5px; margin-top: 10px; display: none; }
+  .err { color: #f87171; font-size: 12.5px; margin-top: 10px; display: none; line-height: 1.5; }
+  .warn { color: #f59e0b; font-size: 12.5px; margin-top: 10px; display: none; line-height: 1.5; }
+  .status { display: none; margin-top: 12px; font-size: 12.5px; align-items: center; gap: 8px; }
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid rgba(16,185,129,.25);
+    border-top-color: #10b981; border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .ok { color: #34d399; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -53,32 +63,90 @@
     <div class="row">
       <input id="url" type="url" inputmode="url" autocapitalize="off" autocorrect="off"
              spellcheck="false" placeholder="http://192.168.1.5:3000" />
-      <button onclick="connect()">Connect</button>
+      <button id="btn" onclick="connect()">Connect</button>
     </div>
-    <div class="err" id="err">Enter a valid address, e.g. http://192.168.1.5:3000</div>
+    <div class="warn" id="warn"></div>
+    <div class="err" id="err"></div>
+    <div class="status" id="status">
+      <div class="spinner" id="spin"></div>
+      <span id="statusText">Testing connection…</span>
+    </div>
     <div class="hint">
       <span class="dot"></span>Start the server on the command-center laptop
       (<b>npm run dev</b>) and enter its Wi-Fi address here — phone and laptop
       must be on the <b>same Wi-Fi / hotspot</b>.<br><br>
-      Find the laptop's IP with <b>ipconfig</b> (Windows) or <b>ip a</b> (Linux/Mac).
+      Find the laptop's IP with <b>ipconfig</b> (Windows) or <b>ip a</b> (Linux/Mac).<br>
+      If it won't connect: allow <b>Node.js</b> through the Windows firewall
+      (network type: private), and make sure you're typing the <b>laptop's</b> IP —
+      not 127.0.0.1 (that's the phone itself).
     </div>
   </div>
 
 <script>
+  var busy = false;
   function normalize(raw) {
     var v = (raw || '').trim();
     if (!v) return null;
     v = v.replace(/\/+$/, '');
+    v = v.replace(/\/mobile$/i, '');
     if (!/^https?:\/\//i.test(v)) v = 'http://' + v;
     try { var u = new URL(v); if (!u.hostname) return null; } catch (e) { return null; }
     return v;
   }
+  function show(el, msg) {
+    var e = document.getElementById(el);
+    if (msg) { e.textContent = msg; e.style.display = 'block'; }
+    else e.style.display = 'none';
+  }
+  function setStatus(text, showSpinner) {
+    var st = document.getElementById('status');
+    document.getElementById('statusText').textContent = text;
+    document.getElementById('statusText').className = text.indexOf('reachable') >= 0 ? 'ok' : '';
+    document.getElementById('spin').style.display = showSpinner ? 'block' : 'none';
+    st.style.display = text ? 'flex' : 'none';
+  }
   function connect() {
-    var el = document.getElementById('err');
+    if (busy) return;
+    show('err', null); show('warn', null);
     var url = normalize(document.getElementById('url').value);
-    if (!url) { el.style.display = 'block'; return; }
-    el.style.display = 'none';
-    location.href = url + '/mobile';
+    if (!url) { show('err', 'Enter a valid address, e.g. http://192.168.1.5:3000'); return; }
+
+    var host = '';
+    try { host = new URL(url).hostname; } catch (e) { }
+    if (host === 'localhost' || host === '127.0.0.1') {
+      show('warn', 'Tip: localhost is THIS phone. Enter the laptop\u2019s Wi-Fi IP instead (ipconfig on Windows).');
+    }
+
+    busy = true;
+    var btn = document.getElementById('btn');
+    btn.disabled = true; btn.textContent = '…';
+    setStatus('Testing connection…', true);
+
+    // first compile on the server can take a few seconds — be patient
+    var ctrl = new AbortController();
+    var timeout = setTimeout(function () { ctrl.abort(); }, 25000);
+
+    fetch(url + '/api/health', { signal: ctrl.signal, cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('bad status ' + res.status);
+        return res.json();
+      })
+      .then(function (d) {
+        clearTimeout(timeout);
+        if (d.status !== 'ok') throw new Error('not a BhuRakshak server');
+        setStatus('Server reachable — ' + d.zones + ' zones · opening…', false);
+        setTimeout(function () { location.href = url + '/mobile'; }, 400);
+      })
+      .catch(function (e) {
+        clearTimeout(timeout);
+        busy = false;
+        btn.disabled = false; btn.textContent = 'Connect';
+        setStatus('', false);
+        var msg = (e && e.name === 'AbortError')
+          ? 'Timed out. Is the server running? (npm run dev on the laptop)'
+          : 'Server not reachable. Check: same Wi-Fi, correct IP, firewall allows Node.js.';
+        show('err', msg);
+      });
   }
   document.getElementById('url').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') connect();

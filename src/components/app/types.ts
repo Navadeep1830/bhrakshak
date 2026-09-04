@@ -152,3 +152,17 @@ export const CATEGORY_LABELS: Record<string, string> = {
   past_slide: 'Past landslide',
   water_seepage: 'Water seepage',
 };
+
+/** Field message — two-way comms with the command centre. */
+export interface AppFieldMessage {
+  id: string;
+  authorName: string;
+  authorRole: 'field' | 'command' | string;
+  category: string; // sos | help | status | info | gauge
+  body: string;
+  priority: number;
+  zoneCode: string | null;
+  district: string | null;
+  replyToId: string | null;
+  createdAt: string;
+}

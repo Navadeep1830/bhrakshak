@@ -17,20 +17,36 @@ export interface QueuedReport {
   zoneHint?: string | null;
 }
 
+/** Offline field messages (SOS / help / status / info) — queued like reports. */
+export interface QueuedMessage {
+  id: string;
+  category: string;
+  body: string;
+  lat: number | null;
+  lon: number | null;
+  clientCreatedAt: string; // ISO
+}
+
 const DB_NAME = 'bhrakshak-offline';
 const STORE = 'queue';
+const MSG_STORE = 'msgs';
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    // v2 adds the message store (v1 installs keep their report queue)
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
         db.createObjectStore(STORE, { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains(MSG_STORE)) {
+        db.createObjectStore(MSG_STORE, { keyPath: 'id' });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error('indexedDB open failed'));
+    req.onblocked = () => reject(new Error('indexedDB blocked by an old tab'));
   });
 }
 
@@ -45,6 +61,36 @@ function tx<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBReque
         t.oncomplete = () => db.close();
       })
   );
+}
+
+function txMsgs<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  return open().then(
+    (db) =>
+      new Promise<T>((resolve, reject) => {
+        const t = db.transaction(MSG_STORE, mode);
+        const req = fn(t.objectStore(MSG_STORE));
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error ?? new Error('indexedDB request failed'));
+        t.oncomplete = () => db.close();
+      })
+  );
+}
+
+export async function getMsgQueue(): Promise<QueuedMessage[]> {
+  try {
+    const rows = await txMsgs<QueuedMessage[]>('readonly', (s) => s.getAll() as IDBRequest<QueuedMessage[]>);
+    return rows.sort((a, b) => (a.clientCreatedAt < b.clientCreatedAt ? -1 : 1)); // FIFO
+  } catch {
+    return [];
+  }
+}
+
+export async function addMsgToQueue(item: QueuedMessage): Promise<void> {
+  await txMsgs('readwrite', (s) => s.put(item));
+}
+
+export async function removeMsgFromQueue(id: string): Promise<void> {
+  await txMsgs('readwrite', (s) => s.delete(id));
 }
 
 export async function getQueue(): Promise<QueuedReport[]> {

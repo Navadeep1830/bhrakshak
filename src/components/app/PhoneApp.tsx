@@ -8,6 +8,7 @@ import MapIcon from '@mui/icons-material/Map';
 import PhotoCameraFrontIcon from '@mui/icons-material/PhotoCameraFront';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import SyncIcon from '@mui/icons-material/Sync';
+import ForumIcon from '@mui/icons-material/Forum';
 import LandscapeIcon from '@mui/icons-material/Landscape';
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows';
 import { hazardColor } from '@/components/theme';
@@ -15,9 +16,10 @@ import type { SessionUser } from '@/components/login-gate';
 import AppMapView from './AppMapView';
 import AppReport from './AppReport';
 import AppAlerts from './AppAlerts';
+import AppMessages from './AppMessages';
 import AppSync from './AppSync';
 import StreetViewModal, { StreetViewTarget } from './StreetViewModal';
-import type { AppNotification, AppSms, AppZone, BootstrapData, RoutePlanUI } from './types';
+import type { AppNotification, AppSms, AppZone, AppFieldMessage, BootstrapData, RoutePlanUI } from './types';
 import type { QueuedReport } from '@/lib/offline-store';
 
 interface Props {
@@ -36,11 +38,12 @@ const LS = {
   userPos: 'bhr-user-pos',
 };
 
-type Screen = 'map' | 'report' | 'alerts' | 'sync';
+type Screen = 'map' | 'report' | 'comms' | 'alerts' | 'sync';
 
 const SCREENS: Array<{ id: Screen; label: string; icon: React.ReactNode }> = [
   { id: 'map', label: 'Map', icon: <MapIcon sx={{ fontSize: 20 }} /> },
   { id: 'report', label: 'Report', icon: <PhotoCameraFrontIcon sx={{ fontSize: 20 }} /> },
+  { id: 'comms', label: 'Comms', icon: <ForumIcon sx={{ fontSize: 20 }} /> },
   { id: 'alerts', label: 'Alerts', icon: <NotificationsActiveIcon sx={{ fontSize: 20 }} /> },
   { id: 'sync', label: 'Sync', icon: <SyncIcon sx={{ fontSize: 20 }} /> },
 ];
@@ -82,6 +85,9 @@ export default function PhoneApp({ user, onExit }: Props) {
   const [unread, setUnread] = useState(0);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [plan, setPlan] = useState<RoutePlanUI | null>(null);
+  const [fieldMessages, setFieldMessages] = useState<AppFieldMessage[]>([]);
+  const [msgQueue, setMsgQueue] = useState<number>(0);
+  const [msgSending, setMsgSending] = useState(false);
   const [userPos, setUserPos] = useState<{ lat: number; lon: number } | null>(() => lsGet<{ lat: number; lon: number } | null>(LS.userPos, null));
   const [streetTarget, setStreetTarget] = useState<StreetViewTarget | null>(null);
   const [toast, setToast] = useState<{ msg: string; sev: 'success' | 'error' | 'info' } | null>(null);
@@ -221,15 +227,148 @@ export default function PhoneApp({ user, onExit }: Props) {
     return () => clearInterval(iv);
   }, [effectiveOnline, deviceId]);
 
-  /* ── offline queue auto-sync ── */
+  /* ── field messages: poll the device thread (command replies land here) ── */
+  useEffect(() => {
+    if (!effectiveOnline) return;
+    let stop = false;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/app/messages', { headers: { 'x-device-id': deviceId } });
+        if (!res.ok || stop) return;
+        const d = await res.json();
+        if (Array.isArray(d.messages) && !stop) setFieldMessages(d.messages);
+      } catch { /* offline */ }
+    };
+    poll();
+    const iv = setInterval(poll, 10_000);
+    return () => { stop = true; clearInterval(iv); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveOnline, deviceId]);
+
+  /* keep the queued-message count fresh */
+  useEffect(() => {
+    const refresh = async () => {
+      const { getMsgQueue } = await import('@/lib/offline-store');
+      setMsgQueue((await getMsgQueue()).length);
+    };
+    refresh();
+    const iv = setInterval(refresh, 5_000);
+    return () => clearInterval(iv);
+  }, []);
+
+  /* ── send a field message (online → straight through; offline → queue) ── */
+  const sendMessage = useCallback(async (category: string, body: string): Promise<boolean> => {
+    if (!body.trim()) return false;
+    const lat = userPos?.lat ?? null;
+    const lon = userPos?.lon ?? null;
+    const clientCreatedAt = new Date().toISOString();
+    if (!effectiveOnline) {
+      const { addMsgToQueue } = await import('@/lib/offline-store');
+      await addMsgToQueue({ id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, category, body, lat, lon, clientCreatedAt });
+      const { getMsgQueue } = await import('@/lib/offline-store');
+      setMsgQueue((await getMsgQueue()).length);
+      showToast('Offline — message queued, will send when back online', 'info');
+      return true;
+    }
+    setMsgSending(true);
+    try {
+      const res = await fetch('/api/app/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': deviceId },
+        body: JSON.stringify({ category, body, lat, lon }),
+      });
+      const d = await res.json();
+      if (!res.ok || d.error) throw new Error(d.error || 'send failed');
+      showToast(
+        category === 'sos' ? 'SOS sent — command centre notified on priority' : 'Message sent to command centre',
+        category === 'sos' ? 'error' : 'success',
+      );
+      // refresh thread immediately
+      try {
+        const t = await fetch('/api/app/messages', { headers: { 'x-device-id': deviceId } });
+        if (t.ok) { const td = await t.json(); if (Array.isArray(td.messages)) setFieldMessages(td.messages); }
+      } catch { /* */ }
+      return true;
+    } catch (e) {
+      showToast((e as Error).message, 'error');
+      return false;
+    } finally {
+      setMsgSending(false);
+    }
+  }, [deviceId, effectiveOnline, userPos, showToast]);
+
+  /* ── I'M SAFE check-in ── */
+  const safeCheckin = useCallback(async (message?: string) => {
+    const pos = userPos;
+    if (!pos) { showToast('Set your position on the map first (pin-edit button)', 'error'); return; }
+    try {
+      const res = await fetch('/api/app/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': deviceId },
+        body: JSON.stringify({ lat: pos.lat, lon: pos.lon, message }),
+      });
+      const d = await res.json();
+      if (!res.ok || d.error) throw new Error(d.error || 'check-in failed');
+      showToast(`Safe check-in sent — ${d.zoneCode ?? 'field'} (${d.distanceKm} km)`, 'success');
+    } catch (e) {
+      showToast((e as Error).message, 'error');
+    }
+  }, [deviceId, userPos, showToast]);
+
+  /* ── rain gauge reading → real engine pass ── */
+  const submitGauge = useCallback(async (rain1h: number, rain24h: number, soilSaturation: number) => {
+    const pos = userPos;
+    if (!pos) { showToast('Set your position on the map first', 'error'); return; }
+    try {
+      const res = await fetch('/api/app/gauge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-device-id': deviceId },
+        body: JSON.stringify({ lat: pos.lat, lon: pos.lon, rain1h, rain24h, soilMoisture: soilSaturation }),
+      });
+      const d = await res.json();
+      if (!res.ok || d.error) throw new Error(d.error || 'gauge submit failed');
+      showToast(
+        `Gauge at ${d.zoneCode}: ${d.escalated} zone${d.escalated === 1 ? '' : 's'} escalated, ${d.alertsFired} alert${d.alertsFired === 1 ? '' : 's'} fired${d.sms ? `, ${d.sms} SMS` : ''}`,
+        d.escalated > 0 ? 'error' : 'success',
+      );
+      setTimeout(doBootstrap, 2000);
+    } catch (e) {
+      showToast((e as Error).message, 'error');
+    }
+  }, [deviceId, userPos, showToast, doBootstrap]);
+
+  /* ── offline queue auto-sync (reports + messages) ── */
   const syncNow = useCallback(async () => {
     if (syncing) return;
     setSyncing(true);
     try {
-      const { getQueue, removeFromQueue } = await import('@/lib/offline-store');
+      const { getQueue, getMsgQueue, removeFromQueue, removeMsgFromQueue } = await import('@/lib/offline-store');
+
+      // 1) queued field messages
+      const msgs = await getMsgQueue();
+      let msgsSent = 0;
+      if (msgs.length) {
+        const res = await fetch('/api/app/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-device-id': deviceId },
+          body: JSON.stringify({
+            deviceId,
+            messages: msgs.map((m) => ({ clientCreatedAt: m.clientCreatedAt, category: m.category, body: m.body, lat: m.lat, lon: m.lon })),
+          }),
+        });
+        const d = await res.json().catch(() => null);
+        if (res.ok && d?.ok) {
+          for (const m of msgs) await removeMsgFromQueue(m.id);
+          msgsSent = d.synced ?? msgs.length;
+          setMsgQueue(0);
+        }
+      }
+
+      // 2) queued photo reports
       const items = await getQueue();
       if (!items.length) {
-        showToast('Queue is empty', 'info');
+        if (msgsSent) showToast(`Synced ${msgsSent} message${msgsSent > 1 ? 's' : ''}`, 'success');
+        else showToast('Queue is empty', 'info');
         return;
       }
       const { dataUrlToBlob } = await import('@/lib/offline-store');
@@ -259,19 +398,23 @@ export default function PhoneApp({ user, onExit }: Props) {
       setQueue(await getQueue());
       setLastSync(new Date().toISOString());
       lsSet(LS.lastSync, new Date().toISOString());
-      showToast(`Synced ${sent}/${items.length} report${items.length > 1 ? 's' : ''}${flagged ? ` — ${flagged} AI-flagged` : ''}`, 'success');
+      showToast(
+        `Synced ${sent}/${items.length} report${items.length > 1 ? 's' : ''}${flagged ? ` — ${flagged} AI-flagged` : ''}` +
+        (msgsSent ? ` + ${msgsSent} message${msgsSent > 1 ? 's' : ''}` : ''),
+        'success',
+      );
     } finally {
       setSyncing(false);
     }
   }, [deviceId, syncing, showToast]);
 
   useEffect(() => {
-    if (effectiveOnline && queue.length > 0 && !syncing) {
+    if (effectiveOnline && (queue.length > 0 || msgQueue > 0) && !syncing) {
       const t = setTimeout(() => syncNow(), 1500);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveOnline, queue.length]);
+  }, [effectiveOnline, queue.length, msgQueue]);
 
   /* ── storm demo (admin) ── */
   const [stormBusy, setStormBusy] = useState(false);
@@ -392,6 +535,18 @@ export default function PhoneApp({ user, onExit }: Props) {
               deviceId={deviceId}
               onQueueChange={refreshQueue}
               onToast={showToast}
+            />
+          )}
+          {screen === 'comms' && (
+            <AppMessages
+              messages={fieldMessages}
+              online={effectiveOnline}
+              queuedCount={msgQueue}
+              userPos={userPos}
+              sending={msgSending}
+              onSend={sendMessage}
+              onSafeCheckin={safeCheckin}
+              onGaugeSubmit={submitGauge}
             />
           )}
           {screen === 'alerts' && (
