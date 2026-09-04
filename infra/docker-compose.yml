@@ -49,7 +49,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports: ["6380:6379"]
+    ports: ["16379:6379"] # host port below the Windows/Hyper-V dynamic range (6380/6600 both got reserved on this machine)
     command: redis-server --save 60 1 --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
