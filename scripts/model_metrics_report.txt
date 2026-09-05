@@ -1,0 +1,38 @@
+=== A. DATA INVENTORY ===
+zones: 621 | population covered: 48,62,769 | roadKm: 6899 | avg suscMean: 65.3
+susceptibility bands: high=206 | moderate=206 | very_high=166 | low=43
+rainfallObs total: 51997 (provenance: poll=8073 | sim=9349 | storm=34575)
+observation timeline span: 24 h (seeded 48 h history + live appends), engine reads newest row per zone within a 7-day window
+
+=== B. DETERMINISM & MONOTONICITY ===
+hex-grid regeneration: 621 zones in 14.8 ms, byte-identical across runs: PASS (100% reproducible)
+monotonicity (P and I-D tier strictly non-decreasing in rain24h 0→400 mm): prob=PASS, tier=PASS
+
+=== C. SENSITIVITY SWEEP (suscMean=85/very_high, rain1h=8) ===
+0mm→P 6.8%/L0  25mm→P 14.9%/L0  32mm→P 18.2%/L1  50mm→P 29.5%/L1  65mm→P 41.5%/L2  80mm→P 54.5%/L2  100mm→P 70.7%/L3  120mm→P 82.9%/L4  150mm→P 93.3%/L4  200mm→P 98.8%/L4  250mm→P 99.8%/L4  300mm→P 100.0%/L4  400mm→P 100.0%/L4
+I-D threshold table: low: L1@60/20 L2@110/30 L3@160/40 L4@230/55 mm(24h/1h) · moderate: L1@50/15 L2@95/25 L3@140/35 L4@200/48 mm(24h/1h) · high: L1@40/12 L2@80/20 L3@120/28 L4@170/40 mm(24h/1h) · very_high: L1@32/10 L2@65/16 L3@100/24 L4@150/34 mm(24h/1h)
+
+=== D. FUSION ANALYSIS OVER LIVE OBS (621 zones) ===
+evaluated: 621/621 | sub-models agree: 359 (57.8%) | prior higher: 248 | threshold higher: 14
+fused live level distribution: L0=120 | L1=0 | L2=87 | L3=149 | L4=265
+
+=== E. AI PRE-SCREEN vs HUMAN VERDICT (labeled subset) ===
+reports total: 31 | human-labeled: 8 (verified=8, rejected=0)
+confusion matrix — TP(flagged∧verified)=3 FP(flagged∧rejected)=0 FN(missed∧verified)=5 TN=0
+precision=100.0% recall=37.5% F1=0.55
+screening engine split: none=14 | vision+heuristic=17
+flagged confidence: mean 93%, min 71%, max 95%
+
+=== F. COMMS DELIVERY ===
+SMS outbox: 20072 total → 14443 delivered (72.0% delivery rate), 0 failed, settle latency 5–9 s
+alerts lifetime: 5837 → acked=8 | active=1287 | allclear=4542 | field ack rate: 0.1%
+notification events: allclear=1722 | landslide_alert=3108 | report_flagged=16
+i18n coverage: 40 templates in DB = 5 alert keys × 8 languages, all 8 languages render per alert: PASS (100%)
+
+=== G. STABILITY (anti-flapping) ===
+snapshots: 19251 across 621 zones (avg 31.0/zone) | level transitions: 1699 | direction reversals (flap events): 192 | reversal rate: 11.3% of transitions
+engine audit (ModelRun): 53 passes | escalations 2378 | de-escalations 1080 | alerts fanned 3458 | max level reached L4 | 0 spurious duplicate alerts (alerts fire only on transitions)
+
+=== H. PERFORMANCE ===
+full per-zone scoring (prob + tier + fusion + driver decomposition): 0.005 ms/zone → 621-zone pass ≈ 3.1 ms of pure compute
+live probability stats across zones: mean 60.4% | max 100.0% | min 0.7%
