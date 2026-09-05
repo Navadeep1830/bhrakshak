@@ -182,20 +182,29 @@ export default function SimulateView() {
   /* ── Noney-2022 scenario replay: sequential real engine passes ── */
   const replayStep = async (i: number) => {
     const s = REPLAY_STEPS[i];
-    const res = await fetch('/api/simulate/conditions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ district: 'Noney', rain1h: s.rain1h, rain24h: s.rain24h, soilMoisture: s.soil }),
-    });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error || 'replay step failed');
-    setReplayResults((prev) => {
-      const next = [...prev];
-      next[i] = { maxLevel: d.maxLevel, alerts: d.alertsFired, sms: d.sms, escalated: d.escalated };
-      return next;
-    });
-    qc.invalidateQueries();
-    return d as InjectResult;
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch('/api/simulate/conditions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ district: 'Noney', rain1h: s.rain1h, rain24h: s.rain24h, soilMoisture: s.soil }),
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error || 'replay step failed');
+        setReplayResults((prev) => {
+          const next = [...prev];
+          next[i] = { maxLevel: d.maxLevel, alerts: d.alertsFired, sms: d.sms, escalated: d.escalated };
+          return next;
+        });
+        qc.invalidateQueries();
+        return d as InjectResult;
+      } catch (err) {
+        lastErr = err as Error;
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+    throw lastErr ?? new Error('replay step failed');
   };
 
   const playReplay = async () => {

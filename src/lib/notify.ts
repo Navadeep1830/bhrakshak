@@ -107,6 +107,15 @@ export async function fanOutAlerts(alerts: AlertFanIn[]): Promise<FanOutStats> {
 
   await ensureDemoDevices();
 
+  const deviceCache = new Map<string, Awaited<ReturnType<typeof devicesInScope>>>();
+  const getDevices = async (district: string | null) => {
+    const key = district ?? '__all__';
+    if (!deviceCache.has(key)) {
+      deviceCache.set(key, await devicesInScope(district));
+    }
+    return deviceCache.get(key)!;
+  };
+
   for (const a of alerts) {
     const kind = a.kind ?? 'landslide_alert';
     // full DDMA channel policy: L1 push · L2 push+sms · L3 +ivr · L4 +siren
@@ -127,25 +136,25 @@ export async function fanOutAlerts(alerts: AlertFanIn[]): Promise<FanOutStats> {
     notifications++;
 
     if (a.level >= 3) {
-      const devices = await devicesInScope(a.district);
+      const devices = await getDevices(a.district);
       const rows = devices.map((d, i) => {
         const now = Date.now();
-        return db.smsMessage.create({
-          data: {
-            notificationId: ev.id,
-            deviceId: d.id,
-            phone: d.phone ?? '+910000000000',
-            body: smsBodyAlert(a),
-            status: 'sent',
-            queuedAt: new Date(now),
-            sentAt: new Date(now),
-            // deterministic-ish delivery latency 5–9 s — visible progress
-            deliveredAt: new Date(now + 5000 + ((a.zoneCode.charCodeAt(1) + i * 3) % 5) * 1000),
-          },
-        });
+        return {
+          notificationId: ev.id,
+          deviceId: d.id,
+          phone: d.phone ?? '+910000000000',
+          body: smsBodyAlert(a),
+          status: 'sent',
+          queuedAt: new Date(now),
+          sentAt: new Date(now),
+          // deterministic-ish delivery latency 5–9 s — visible progress
+          deliveredAt: new Date(now + 5000 + ((a.zoneCode.charCodeAt(1) + i * 3) % 5) * 1000),
+        };
       });
-      await Promise.all(rows);
-      sms += rows.length;
+      if (rows.length) {
+        await db.smsMessage.createMany({ data: rows });
+        sms += rows.length;
+      }
     }
   }
   return { notifications, sms };

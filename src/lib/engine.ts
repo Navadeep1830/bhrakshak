@@ -237,7 +237,11 @@ export async function evaluateAllZones(opts: { tickCount?: number } = {}): Promi
     }
   }
 
-  await Promise.all(updates);
+  // Execute updates in manageable chunks to prevent SQLite concurrency lock timeouts
+  const CHUNK_SIZE = 50;
+  for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
+    await Promise.all(updates.slice(i, i + CHUNK_SIZE));
+  }
 
   // ── engine pass log: a ModelRun row whenever zones actually changed level.
   //    This is what the Analytics "recent engine passes" table reads — every

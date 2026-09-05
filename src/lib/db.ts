@@ -11,4 +11,11 @@ export const db =
     log: ['error', 'warn'],
   })
 
+// Ensure SQLite WAL mode and busy timeout for safe concurrent reads/writes
+if (!globalForPrisma.prisma) {
+  db.$executeRawUnsafe('PRAGMA journal_mode = WAL;').catch(() => {});
+  db.$executeRawUnsafe('PRAGMA busy_timeout = 30000;').catch(() => {});
+  db.$executeRawUnsafe('PRAGMA synchronous = NORMAL;').catch(() => {});
+}
+
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
